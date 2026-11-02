@@ -159,13 +159,24 @@ export async function updateChapter(id: string, patch: Patch<Chapter>) {
   if (ch) await touchStory(ch.storyId)
 }
 
-export async function deleteChapter(id: string) {
+/** Delete a chapter with its beats and prose. Returns an undo. */
+export async function deleteChapter(id: string): Promise<Undo> {
+  const chapter = await db.chapters.get(id)
+  const beats = await db.beats.where('chapterId').equals(id).toArray()
+  const drafts = beats.length ? await db.drafts.where('beatId').anyOf(beats.map((b) => b.id)).toArray() : []
   await db.transaction('rw', db.chapters, db.beats, db.drafts, async () => {
-    const beatIds = await db.beats.where('chapterId').equals(id).primaryKeys()
-    await db.drafts.where('beatId').anyOf(beatIds).delete()
+    await db.drafts.where('beatId').anyOf(beats.map((b) => b.id)).delete()
     await db.beats.where('chapterId').equals(id).delete()
     await db.chapters.delete(id)
   })
+  return async () => {
+    if (!chapter) return
+    await db.transaction('rw', db.chapters, db.beats, db.drafts, async () => {
+      await db.chapters.put(chapter)
+      await db.beats.bulkPut(beats)
+      await db.drafts.bulkPut(drafts)
+    })
+  }
 }
 
 /* ───────────── Beats ───────────── */
@@ -193,11 +204,24 @@ export async function updateBeat(id: string, patch: Patch<Beat>) {
   await db.beats.update(id, touch(patch))
 }
 
-export async function deleteBeat(id: string) {
+/** A function that puts back what a delete removed. */
+export type Undo = () => Promise<void>
+
+/** Delete a beat and its prose versions. Returns an undo. */
+export async function deleteBeat(id: string): Promise<Undo> {
+  const beat = await db.beats.get(id)
+  const drafts = await db.drafts.where('beatId').equals(id).toArray()
   await db.transaction('rw', db.beats, db.drafts, async () => {
     await db.drafts.where('beatId').equals(id).delete()
     await db.beats.delete(id)
   })
+  return async () => {
+    if (!beat) return
+    await db.transaction('rw', db.beats, db.drafts, async () => {
+      await db.beats.put(beat)
+      await db.drafts.bulkPut(drafts)
+    })
+  }
 }
 
 export async function duplicateBeat(id: string): Promise<Beat | undefined> {
@@ -261,7 +285,9 @@ export function setActiveDraft(beatId: string, draftId: string | null) {
 }
 
 /** Delete a version; if it was active, fall back to the newest remaining one. */
-export async function deleteDraft(id: string) {
+export async function deleteDraft(id: string): Promise<Undo> {
+  const before = await db.drafts.get(id)
+  const beatBefore = before ? await db.beats.get(before.beatId) : undefined
   await db.transaction('rw', db.beats, db.drafts, async () => {
     const d = await db.drafts.get(id)
     if (!d) return
@@ -272,6 +298,13 @@ export async function deleteDraft(id: string) {
       await db.beats.update(d.beatId, { activeDraftId: rest.at(-1)?.id ?? null, ...(rest.length ? {} : { status: 'ready' as const }) })
     }
   })
+  return async () => {
+    if (!before || !beatBefore) return
+    await db.transaction('rw', db.beats, db.drafts, async () => {
+      await db.drafts.put(before)
+      await db.beats.update(beatBefore.id, { activeDraftId: beatBefore.activeDraftId, status: beatBefore.status })
+    })
+  }
 }
 
 /* ───────────── Helpers ───────────── */
@@ -336,12 +369,14 @@ export async function importBackup(backup: TrellisBackup, database: TrellisDB = 
 
 export const MAX_SNAPSHOTS = 20
 
-export async function takeSnapshot(label: string) {
+export async function takeSnapshot(label: string): Promise<string> {
   const data = JSON.stringify(await exportBackup())
-  await db.snapshots.add({ id: newId('snap_'), createdAt: Date.now(), label, data })
+  const id = newId('snap_')
+  await db.snapshots.add({ id, createdAt: Date.now(), label, data })
   const all = await db.snapshots.orderBy('createdAt').toArray()
   const excess = all.length - MAX_SNAPSHOTS
   if (excess > 0) await db.snapshots.bulkDelete(all.slice(0, excess).map((s) => s.id))
+  return id
 }
 
 export async function restoreSnapshot(id: string) {
@@ -377,8 +412,29 @@ export function updateIdea(storyId: string, ideaId: string, text: string) {
   })
 }
 
-export function removeIdeas(storyId: string, ideaIds: string[]) {
-  return mutateStory(storyId, (s) => {
+export async function removeIdeas(storyId: string, ideaIds: string[]): Promise<Undo> {
+  const before = (await db.stories.get(storyId))?.ideas ?? []
+  await mutateStory(storyId, (s) => {
     s.ideas = (s.ideas ?? []).filter((i) => !ideaIds.includes(i.id))
   })
+  const removed = before.filter((i) => ideaIds.includes(i.id))
+  return () =>
+    mutateStory(storyId, (s) => {
+      const keep = new Set((s.ideas ?? []).map((i) => i.id))
+      s.ideas = [...(s.ideas ?? []), ...removed.filter((i) => !keep.has(i.id))].sort((a, b) => a.createdAt - b.createdAt)
+    }).then(() => undefined)
+}
+
+/** Remove a character from a story's cast (the character stays in the library). */
+export async function removeFromCast(storyId: string, characterId: string): Promise<Undo> {
+  const story = await db.stories.get(storyId)
+  const index = story?.cast.findIndex((m) => m.characterId === characterId) ?? -1
+  const member = index >= 0 ? story!.cast[index] : undefined
+  await mutateStory(storyId, (s) => {
+    s.cast = s.cast.filter((m) => m.characterId !== characterId)
+  })
+  return () =>
+    mutateStory(storyId, (s) => {
+      if (member && !s.cast.some((m) => m.characterId === characterId)) s.cast.splice(Math.min(index, s.cast.length), 0, member)
+    }).then(() => undefined)
 }

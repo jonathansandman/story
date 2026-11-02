@@ -6,11 +6,14 @@ import { AiProvider } from '@/features/ai/ai-context'
 import { CharacterEditor } from '@/features/characters/CharacterEditor'
 import { CharacterLibrary } from '@/features/characters/CharacterLibrary'
 import { Settings } from '@/features/settings/Settings'
-import { CastView } from '@/features/stories/CastView'
-import { OutlineView } from '@/features/stories/OutlineView'
 import { StoriesHome } from '@/features/stories/StoriesHome'
-import { StoryBible } from '@/features/stories/StoryBible'
-import { StoryLayout } from '@/features/stories/StoryLayout'
+import { StoryShell } from '@/features/story/StoryShell'
+import { OutlineTab } from '@/features/story/OutlineTab'
+import { WriteTab } from '@/features/story/WriteTab'
+import { ReadTab } from '@/features/story/ReadTab'
+import { IdeasTab } from '@/features/story/IdeasTab'
+import { StoryTab } from '@/features/story/StoryTab'
+import { Navigate } from 'react-router'
 import { StoryBuilder } from '@/features/builder/StoryBuilder'
 
 function Root() {
@@ -34,11 +37,16 @@ const routes = [
       { path: 'characters/:characterId', element: <CharacterEditor /> },
       {
         path: 'stories/:storyId',
-        element: <StoryLayout />,
+        element: <StoryShell />,
         children: [
-          { index: true, element: <OutlineView /> },
-          { path: 'bible', element: <StoryBible /> },
-          { path: 'cast', element: <CastView /> },
+          { index: true, element: <OutlineTab /> },
+          { path: 'write', element: <WriteTab /> },
+          { path: 'read', element: <ReadTab /> },
+          { path: 'ideas', element: <IdeasTab /> },
+          { path: 'story', element: <StoryTab /> },
+          // Old links.
+          { path: 'bible', element: <Navigate to="../story" replace /> },
+          { path: 'cast', element: <Navigate to="../story" replace /> },
         ],
       },
       { path: 'new', element: <StoryBuilder /> },

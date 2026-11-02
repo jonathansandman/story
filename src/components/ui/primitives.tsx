@@ -16,10 +16,11 @@ const variants: Record<Variant, string> = {
   danger: 'text-[#b4443c] hover:bg-[#b4443c]/10',
 }
 const sizes: Record<Size, string> = {
-  sm: 'h-7 px-2.5 text-[12.5px] gap-1.5 rounded-md',
-  md: 'h-8.5 px-3.5 text-[13px] gap-2 rounded-lg',
-  icon: 'h-8 w-8 rounded-lg justify-center',
-  'icon-sm': 'h-6.5 w-6.5 rounded-md justify-center',
+  // Phones get ≥40–44px targets; pointer devices keep the compact sizes.
+  sm: 'h-7 px-2.5 text-[12.5px] gap-1.5 rounded-md max-lg:h-10 max-lg:px-3.5 max-lg:text-[14px]',
+  md: 'h-8.5 px-3.5 text-[13px] gap-2 rounded-lg max-lg:h-11 max-lg:px-4 max-lg:text-[15px]',
+  icon: 'h-8 w-8 rounded-lg justify-center max-lg:h-11 max-lg:w-11',
+  'icon-sm': 'h-6.5 w-6.5 rounded-md justify-center max-lg:h-10 max-lg:w-10',
 }
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -91,9 +92,10 @@ export function useDraft<T>(value: T, commit: (v: T) => void, delay = 350) {
   }
 }
 
+/** Inline-editable text: a dashed underline says "you can type here" without a full box. */
 const quietField =
-  'w-full bg-transparent outline-none rounded-md transition-colors duration-150 ' +
-  'hover:bg-surface-2/70 focus:bg-surface-2 px-2 -mx-2 py-1'
+  'w-full bg-transparent outline-none transition-colors duration-150 rounded-none ' +
+  'border-0 border-b border-dashed border-line-strong focus:border-solid focus:border-accent py-1'
 
 const boxedField =
   'w-full rounded-lg border border-line bg-surface px-3 py-2 outline-none transition-colors ' +
@@ -107,6 +109,7 @@ interface TextInputProps {
   variant?: 'quiet' | 'boxed'
   autoFocus?: boolean
   'aria-label'?: string
+  inputMode?: 'text' | 'numeric' | 'decimal' | 'search'
 }
 
 export function TextInput({ value, onCommit, className, variant = 'boxed', ...rest }: TextInputProps) {
@@ -288,7 +291,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           className={cn(
             'rounded-md font-medium transition-all duration-150',
-            size === 'sm' ? 'h-6 px-2 text-[11.5px]' : 'h-7 px-3 text-[12.5px]',
+            size === 'sm' ? 'h-6 px-2 text-[11.5px] max-lg:h-9 max-lg:px-3 max-lg:text-[13px]' : 'h-7 px-3 text-[12.5px] max-lg:h-10 max-lg:px-3.5 max-lg:text-[14px]',
             value === o.value ? 'bg-surface text-ink shadow-soft' : 'text-muted hover:text-ink',
           )}
         >

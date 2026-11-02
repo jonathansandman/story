@@ -43,7 +43,6 @@ export function SendStep({
             <Check size={15} className="text-ok" /> Prompt copied
             <span className="font-normal text-faint">· ~{estimateTokens(prompt).toLocaleString()} tokens</span>
           </p>
-          <p className="mt-1 text-[13px] text-muted">Paste it into Grok and send. When it replies, copy the whole reply and come back.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <a
               href={GROK_URL}

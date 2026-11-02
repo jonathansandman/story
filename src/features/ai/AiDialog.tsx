@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ArrowLeft, ArrowRight, Check, Lightbulb, RefreshCw, Sparkles, Wand2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Lightbulb, RefreshCw, Sparkles, Wand2, X } from 'lucide-react'
 import { useCharacters, useStories } from '@/db/hooks'
 import { db } from '@/db/db'
-import { addIdea, removeIdeas } from '@/db/repo'
+import { addIdea, removeIdeas, restoreSnapshot } from '@/db/repo'
 import { applyPlan, loadState } from '@/ai/apply'
 import { changeIdeasFor } from '@/ai/changes'
 import { buildAiRequest, type AiRequest } from '@/ai/requests'
@@ -111,7 +111,7 @@ export function AiDialog({ start, onClose }: { start: AiDialogStart; onClose: ()
     await copyText(built.prompt)
     setPrompt(built.prompt)
     setTargetStoryId(built.targetStoryId)
-    savePending({ title: built.title, targetStoryId: built.targetStoryId, at: Date.now() })
+    savePending({ title: built.title, targetStoryId: built.targetStoryId, at: Date.now(), ...(start.kind === 'weave' ? { ideaIds: chosenIdeas.map((i) => i.id) } : {}) })
     setStep('send')
   }
 
@@ -119,9 +119,12 @@ export function AiDialog({ start, onClose }: { start: AiDialogStart; onClose: ()
     if (!plan) return
     setBusy(true)
     try {
-      await applyPlan(plan, selected)
+      const pending = loadPending()
+      const snapshotId = await applyPlan(plan, selected)
       clearPending()
+      // Woven ideas leave the inbox — whether applied here or after returning via “Paste reply”.
       if (start.kind === 'weave') await removeIdeas(start.storyId, chosenIdeas.map((i) => i.id))
+      else if (start.kind === 'import' && pending?.ideaIds?.length && pending.targetStoryId) await removeIdeas(pending.targetStoryId, pending.ideaIds)
       // Story/character edits: queue a "[CHANGE]" idea so the outline can follow in one tap.
       let queued = 0
       if (start.kind === 'story' || start.kind === 'character' || start.kind === 'import') {
@@ -132,7 +135,7 @@ export function AiDialog({ start, onClose }: { start: AiDialogStart; onClose: ()
         }
       }
       const n = plan.changes.filter((c) => c.required || selected.has(c.key)).length
-      toast('Applied', queued ? 'Added “update outline to match” to your ideas' : `${n} change${n === 1 ? '' : 's'} · undo from Settings → Snapshots`)
+      toast('Applied', queued ? 'Outline update added to Ideas' : `${n} change${n === 1 ? '' : 's'}`, snapshotId ? { action: { label: 'Undo', run: () => restoreSnapshot(snapshotId) } } : undefined)
       onClose()
       const firstChapter = plan.changes.find((c) => c.group === 'chapter' && selected.has(c.key))
       const chars = plan.changes.filter((c) => c.group === 'character' && selected.has(c.key))
@@ -184,13 +187,13 @@ export function AiDialog({ start, onClose }: { start: AiDialogStart; onClose: ()
       {/* Header */}
       <div className="border-b border-line px-5 pt-4 pb-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="flex min-w-0 items-center gap-2 font-serif text-[19px]">
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="-ml-2">
+            <X />
+          </Button>
+          <h2 className="flex min-w-0 flex-1 items-center gap-2 font-serif text-[19px]">
             {kind === 'weave' ? <Lightbulb size={17} className="shrink-0 text-accent" /> : <Wand2 size={17} className="shrink-0 text-accent" />}
             <span className="truncate">{heading}</span>
           </h2>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
         </div>
         <ol className="mt-3 flex items-center gap-2 text-[11.5px]">
           {steps.map((s, i) => (
@@ -215,7 +218,6 @@ export function AiDialog({ start, onClose }: { start: AiDialogStart; onClose: ()
           <div className="space-y-5">
             {kind === 'weave' && (
               <>
-                <p className="text-[13.5px] text-muted">Grok reads the whole outline and places each idea where it fits best — new beats in the right spot, small tweaks to neighbours. You approve every change.</p>
                 {ideas.length > 0 ? (
                   <ul className="space-y-1.5">
                     {ideas.map((i) => {
@@ -240,9 +242,9 @@ export function AiDialog({ start, onClose }: { start: AiDialogStart; onClose: ()
                     })}
                   </ul>
                 ) : (
-                  <p className="text-[13px] text-faint">No ideas in the inbox — describe one below.</p>
+                  null
                 )}
-                <Field label={ideas.length ? 'Anything else? (optional)' : 'Your idea'}>
+                <Field label={ideas.length ? 'Anything else?' : 'Your idea'}>
                   <textarea
                     value={instruction}
                     onChange={(e) => setInstruction(e.target.value)}
@@ -256,8 +258,7 @@ export function AiDialog({ start, onClose }: { start: AiDialogStart; onClose: ()
 
             {kind === 'brainstorm' && (
               <>
-                <p className="text-[13.5px] text-muted">Grok proposes 8–12 candidate beats, each with a reason and where it would go. You tick the ones you like — its strongest picks are pre-ticked.</p>
-                <Field label="Any direction? (optional)">
+                <Field label="Direction">
                   <textarea
                     autoFocus
                     value={instruction}
@@ -271,7 +272,7 @@ export function AiDialog({ start, onClose }: { start: AiDialogStart; onClose: ()
             )}
 
             {kind === 'new-character' && (
-              <Field label="Who is this person?" hint="A name, a vibe, a role, a few details — the AI builds the full profile.">
+              <Field label="Who is this person?">
                 <textarea
                   autoFocus
                   value={instruction}
@@ -285,7 +286,7 @@ export function AiDialog({ start, onClose }: { start: AiDialogStart; onClose: ()
 
             {(kind === 'story' || kind === 'character' || kind === 'chapter' || kind === 'beat') && (
               <>
-                <Field label="What should change?" hint="Plain words. The AI sees the current version and replies with only the changes.">
+                <Field label="What should change?">
                   <textarea
                     autoFocus
                     value={instruction}
@@ -300,7 +301,6 @@ export function AiDialog({ start, onClose }: { start: AiDialogStart; onClose: ()
                     checked={includeOutline}
                     onChange={setIncludeOutline}
                     label="Include every beat and full character sheets"
-                    hint="For outline-wide edits. Tip: for changes that should ripple through the beats, use Ideas → Weave in instead."
                   />
                 )}
               </>
@@ -332,7 +332,7 @@ export function AiDialog({ start, onClose }: { start: AiDialogStart; onClose: ()
               status={plan && (plan.changes.length ? <>Found <strong className="text-ink">{plan.changes.length}</strong> item{plan.changes.length === 1 ? '' : 's'} to review.</> : 'Everything in the reply already matches what you have.')}
             />
             {kind === 'import' && (
-              <Field label="Apply to story" hint="Where chapters and story changes go. “None” creates a new story if the reply contains one.">
+              <Field label="Apply to story">
                 <Select
                   value={targetStoryId ?? ''}
                   onChange={(v) => setTargetStoryId(v || null)}

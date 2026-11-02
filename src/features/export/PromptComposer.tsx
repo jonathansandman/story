@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AlertCircle, Check, Copy, Info, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { AlertCircle, Check, Copy, Info, SlidersHorizontal, Sparkles, X } from 'lucide-react'
 import { useBundle } from '@/db/hooks'
 import { updateStory } from '@/db/repo'
 import type { DetailLevel, ExportOptions, PromptFormat } from '@/db/types'
@@ -87,7 +87,7 @@ export function PromptComposer({ storyId, scope, onClose }: { storyId: string; s
         <Segmented value={options.format} onChange={(v) => set('format', v)} options={FORMAT_OPTIONS} size="sm" />
       </Group>
 
-      <Group label="Character detail" hint="Less detail = less prompt bloat. Boundaries are always included.">
+      <Group label="Character detail">
         <Segmented value={options.characterDetail} onChange={(v) => set('characterDetail', v)} options={DETAIL_OPTIONS} size="sm" />
       </Group>
 
@@ -135,23 +135,22 @@ export function PromptComposer({ storyId, scope, onClose }: { storyId: string; s
 
       <Group label="Include">
         <div className="space-y-0.5">
-          <Switch checked={options.includeTask} onChange={(v) => set('includeTask', v)} label="Writing instructions" hint="POV, tense, length, where to stop" />
-          <Switch checked={options.includeCraft !== false} onChange={(v) => set('includeCraft', v)} label="Craft rules" hint="No repetition, show don’t label, varied rhythm, inner life" />
-          <Switch checked={options.includeStory} onChange={(v) => set('includeStory', v)} label="Story bible" hint="Premise, heat, style guide, rules" />
-          <Switch checked={options.includeRelationships} onChange={(v) => set('includeRelationships', v)} label="Relationship dynamics" hint="Only between characters on the page" />
-          <Switch checked={options.includeContinuity} onChange={(v) => set('includeContinuity', v)} label="Story so far" hint="Chapter summaries and beat recaps" />
+          <Switch checked={options.includeTask} onChange={(v) => set('includeTask', v)} label="Writing instructions" />
+          <Switch checked={options.includeCraft !== false} onChange={(v) => set('includeCraft', v)} label="Craft rules" />
+          <Switch checked={options.includeStory} onChange={(v) => set('includeStory', v)} label="Story bible" />
+          <Switch checked={options.includeRelationships} onChange={(v) => set('includeRelationships', v)} label="Relationships" />
+          <Switch checked={options.includeContinuity} onChange={(v) => set('includeContinuity', v)} label="Story so far" />
           <Switch
             checked={options.includePreviousPassage}
             onChange={(v) => set('includePreviousPassage', v)}
             label="End of previous passage"
-            hint="Quotes the last ~250 words of prose so it picks up seamlessly"
           />
-          <Switch checked={options.includeNextBeat} onChange={(v) => set('includeNextBeat', v)} label="Stop marker" hint="Shows what comes next so the AI doesn't overrun" />
-          <Switch checked={options.includeWriterNotes} onChange={(v) => set('includeWriterNotes', v)} label="Private writer notes" hint="Off by default — these are for you" />
+          <Switch checked={options.includeNextBeat} onChange={(v) => set('includeNextBeat', v)} label="Next beat as stop point" />
+          <Switch checked={options.includeWriterNotes} onChange={(v) => set('includeWriterNotes', v)} label="Private notes" />
         </div>
       </Group>
 
-      <Group label="Extra instructions" hint="Appended to the task. Remembered for this story.">
+      <Group label="Extra instructions">
         <textarea
           value={options.extraInstructions}
           onChange={(e) => set('extraInstructions', e.target.value)}
@@ -164,7 +163,7 @@ export function PromptComposer({ storyId, scope, onClose }: { storyId: string; s
   )
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Compose prompt" hideHeader className="h-[min(88vh,900px)] max-w-6xl overflow-hidden max-md:top-0 max-md:left-0 max-md:h-dvh max-md:max-h-none max-md:w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0">
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Prompt options" hideHeader className="h-[min(88vh,900px)] max-w-6xl overflow-hidden max-md:top-0 max-md:left-0 max-md:h-dvh max-md:max-h-none max-md:w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0">
       {!bundle || !options || !built ? (
         <div className="p-10 text-muted">Loading…</div>
       ) : (
@@ -173,7 +172,7 @@ export function PromptComposer({ storyId, scope, onClose }: { storyId: string; s
           <aside className="flex w-[320px] shrink-0 flex-col overflow-y-auto border-r border-line bg-surface-2/40 max-md:hidden">
             <div className="border-b border-line px-5 py-4">
               <div className="flex items-center gap-2 text-[11.5px] font-semibold tracking-[0.08em] text-faint uppercase">
-                <Sparkles size={13} /> Compose prompt
+                <Sparkles size={13} /> Prompt options
               </div>
               <h2 className="mt-1.5 font-serif text-[17px] leading-snug text-ink">{built.result.doc.title}</h2>
             </div>
@@ -183,13 +182,16 @@ export function PromptComposer({ storyId, scope, onClose }: { storyId: string; s
 
           {/* ── Preview ── */}
           <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="flex items-center gap-2 border-b border-line px-4 py-2.5 md:hidden">
-              <h2 className="min-w-0 flex-1 truncate font-serif text-[15px]">{built.result.doc.title}</h2>
+            <div className="flex items-center gap-1 border-b border-line px-2 py-1.5 md:hidden">
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+                <X />
+              </Button>
+              <h2 className="min-w-0 flex-1 truncate font-serif text-[16px]">{built.result.doc.title}</h2>
               <Button size="sm" variant={showOptions ? 'subtle' : 'ghost'} onClick={() => setShowOptions((v) => !v)}>
                 <SlidersHorizontal /> Options
               </Button>
             </div>
-            <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-4 py-3 md:px-6">
+            <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-4 py-2.5 md:px-6 md:py-3">
               <div className="flex items-center gap-4 text-[12.5px] text-muted tabular-nums">
                 <span>
                   <strong className="font-semibold text-ink">~{tokens.toLocaleString()}</strong> tokens
@@ -197,7 +199,7 @@ export function PromptComposer({ storyId, scope, onClose }: { storyId: string; s
                 <span>{wordCount(built.out).toLocaleString()} words</span>
                 <span>{built.result.beats.length} beat{built.result.beats.length === 1 ? '' : 's'}</span>
               </div>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex items-center gap-2 max-md:hidden">
                 <Button variant="ghost" onClick={onClose}>
                   Close
                 </Button>
@@ -212,7 +214,6 @@ export function PromptComposer({ storyId, scope, onClose }: { storyId: string; s
 
             {built.hints.length > 0 && (
               <div className="border-b border-line bg-surface-2/40 px-4 py-3 md:px-6">
-                <p className="mb-1.5 text-[11.5px] font-semibold tracking-[0.08em] text-faint uppercase">Before you send — the AI will have to guess:</p>
                 <ul className="space-y-1">
                   {built.hints.slice(0, 5).map((h, i) => (
                     <li key={i} className="flex items-start gap-2 text-[12.5px] text-muted">
@@ -227,6 +228,11 @@ export function PromptComposer({ storyId, scope, onClose }: { storyId: string; s
 
             <div className="min-h-0 flex-1 overflow-y-auto bg-surface px-4 py-5 md:px-6">
               <PromptPreview text={built.out} format={options.format} />
+            </div>
+            <div className="shrink-0 border-t border-line bg-surface px-3 pt-3 pb-[max(12px,env(safe-area-inset-bottom,0px))] md:hidden">
+              <Button variant="primary" className="w-full justify-center" onClick={copy}>
+                {copied ? <Check /> : <Copy />} {copied ? 'Copied' : 'Copy prompt'}
+              </Button>
             </div>
           </section>
         </div>

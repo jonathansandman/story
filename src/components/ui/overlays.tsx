@@ -1,7 +1,7 @@
 import * as RDialog from '@radix-ui/react-dialog'
 import * as RMenu from '@radix-ui/react-dropdown-menu'
 import * as RPopover from '@radix-ui/react-popover'
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Check, X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
@@ -24,6 +24,7 @@ export function Dialog({
   className?: string
   hideHeader?: boolean
 }) {
+  useHistoryDismiss(open, () => onOpenChange(false))
   return (
     <RDialog.Root open={open} onOpenChange={onOpenChange}>
       <RDialog.Portal>
@@ -169,39 +170,149 @@ export function PopoverContent({ children, className, align = 'start' }: { child
 
 /* ───────────── Toasts ───────────── */
 
+export interface ToastAction {
+  label: string
+  run: () => void | Promise<void>
+}
+
 interface Toast {
   id: number
   title: string
   detail?: string
+  action?: ToastAction
 }
 
-const ToastContext = createContext<(title: string, detail?: string) => void>(() => {})
+type ToastFn = (title: string, detail?: string, opts?: { action?: ToastAction }) => void
+const ToastContext = createContext<ToastFn>(() => {})
 
 export function useToast() {
   return useContext(ToastContext)
 }
 
+/**
+ * Toasts sit at the top so they never cover the action you just tapped.
+ * A toast with an action (Undo) stays longer and can be tapped.
+ */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const seq = useRef(0)
-  const push = useCallback((title: string, detail?: string) => {
-    const id = ++seq.current
-    setToasts((t) => [...t.slice(-2), { id, title, detail }])
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2800)
-  }, [])
+  const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), [])
+  const push = useCallback<ToastFn>(
+    (title, detail, opts) => {
+      const id = ++seq.current
+      setToasts((t) => [...t.slice(-1), { id, title, detail, action: opts?.action }])
+      setTimeout(() => dismiss(id), opts?.action ? 6000 : 2600)
+    },
+    [dismiss],
+  )
   const value = useMemo(() => push, [push])
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed right-0 bottom-0 z-[60] flex flex-col items-end gap-2 p-5" aria-live="polite">
+      <div
+        className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-3 pt-[calc(env(safe-area-inset-top,0px)+10px)]"
+        aria-live="polite"
+      >
         {toasts.map((t) => (
-          <div key={t.id} className="flex items-center gap-3 rounded-xl bg-ink px-4 py-2.5 text-[13px] text-bg shadow-lift animate-rise">
-            <Check size={15} className="text-accent-soft" />
-            <span className="font-medium">{t.title}</span>
-            {t.detail && <span className="opacity-60">{t.detail}</span>}
+          <div
+            key={t.id}
+            className="pointer-events-auto flex max-w-[min(92vw,460px)] items-center gap-3 rounded-xl bg-ink py-2 pr-2 pl-4 text-[13.5px] text-bg shadow-lift animate-rise"
+          >
+            <Check size={15} className="shrink-0 text-accent-soft" />
+            <span className="min-w-0 flex-1">
+              <span className="font-medium">{t.title}</span>
+              {t.detail && <span className="ml-2 opacity-60">{t.detail}</span>}
+            </span>
+            {t.action ? (
+              <button
+                onClick={async () => {
+                  dismiss(t.id)
+                  await t.action!.run()
+                }}
+                className="h-9 shrink-0 rounded-lg px-3 font-semibold text-accent-soft hover:bg-white/10"
+              >
+                {t.action.label}
+              </button>
+            ) : (
+              <span className="w-2" />
+            )}
           </div>
         ))}
       </div>
     </ToastContext.Provider>
+  )
+}
+
+/* ───────────── Back closes overlays ───────────── */
+
+/**
+ * While an overlay is open, push a history entry so the phone's Back gesture
+ * closes the overlay instead of leaving the page. Closing it any other way
+ * pops that entry again. The push is deferred a tick so React StrictMode's
+ * double-mount in development doesn't leave stray entries.
+ */
+export function useHistoryDismiss(open: boolean, onClose: () => void) {
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  useEffect(() => {
+    if (!open) return
+    const marker = `o${Math.random().toString(36).slice(2)}`
+    let pushed = false
+    let popped = false
+    const onPop = () => {
+      popped = true
+      closeRef.current()
+    }
+    const t = setTimeout(() => {
+      window.history.pushState({ ...(window.history.state ?? {}), __overlay: marker }, '')
+      pushed = true
+      window.addEventListener('popstate', onPop)
+    }, 0)
+    return () => {
+      clearTimeout(t)
+      window.removeEventListener('popstate', onPop)
+      if (pushed && !popped && (window.history.state as { __overlay?: string } | null)?.__overlay === marker) window.history.back()
+    }
+  }, [open])
+}
+
+/* ───────────── Sheet ───────────── */
+
+/**
+ * A bottom sheet on phones (thumb-reachable, swipe-free dismiss via Back or
+ * the scrim) and an anchored panel on desktop.
+ */
+export function Sheet({
+  open,
+  onOpenChange,
+  title,
+  children,
+  className,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  title: string
+  children: ReactNode
+  className?: string
+}) {
+  useHistoryDismiss(open, () => onOpenChange(false))
+  return (
+    <RDialog.Root open={open} onOpenChange={onOpenChange}>
+      <RDialog.Portal>
+        <RDialog.Overlay className="fixed inset-0 z-40 bg-[#1a1512]/30 animate-fade-in dark:bg-black/50" />
+        <RDialog.Content
+          className={cn(
+            'fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] flex-col rounded-t-2xl border-t border-line bg-surface pb-[env(safe-area-inset-bottom,0px)] shadow-lift outline-none animate-rise',
+            'lg:inset-x-auto lg:top-16 lg:right-4 lg:bottom-auto lg:w-[400px] lg:rounded-2xl lg:border',
+            className,
+          )}
+        >
+          <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-line-strong lg:hidden" />
+          <RDialog.Title className="sr-only">{title}</RDialog.Title>
+          <RDialog.Description className="sr-only">{title}</RDialog.Description>
+          {children}
+        </RDialog.Content>
+      </RDialog.Portal>
+    </RDialog.Root>
   )
 }

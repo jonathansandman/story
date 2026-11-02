@@ -32,7 +32,6 @@ export function RelationshipDialog({
           {a?.name ?? '…'} & {b?.name ?? '…'}
         </span>
       }
-      description="Exported whenever both characters are on the page."
       className="max-w-2xl"
     >
       {r && (
@@ -40,16 +39,16 @@ export function RelationshipDialog({
           <Field label="In a few words">
             <TextInput value={r.label} onCommit={(v) => updateRelationship(r.id, { label: v })} placeholder="Married nine years, drifting" />
           </Field>
-          <Field label="Dynamic" hint="Power balance, rhythm, how affection and friction show up.">
+          <Field label="Dynamic">
             <TextArea value={r.dynamic} onCommit={(v) => updateRelationship(r.id, { dynamic: v })} placeholder="How are they together, when no one is watching?" />
           </Field>
           <Field label="Shared history">
             <TextArea value={r.history} onCommit={(v) => updateRelationship(r.id, { history: v })} placeholder="What do they both remember differently?" />
           </Field>
-          <Field label="Current tension" hint="The live wire. What's unresolved right now?">
+          <Field label="Current tension">
             <TextArea value={r.tension} onCommit={(v) => updateRelationship(r.id, { tension: v })} placeholder="What does each want from the other that they won't ask for?" />
           </Field>
-          <Field label="Consent and check-ins" hint="How they negotiate intimacy, signal, and stop.">
+          <Field label="Consent and check-ins">
             <TextArea value={r.consent} onCommit={(v) => updateRelationship(r.id, { consent: v })} placeholder="How does each ask? How does each say no?" />
           </Field>
           <div className="flex justify-between border-t border-line pt-4">

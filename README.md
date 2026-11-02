@@ -38,19 +38,31 @@ No accounts and no server. Your data lives in your browser's IndexedDB.
 
 ## Information architecture
 
-```
-Sidebar ──┬── Stories (home) ── story cards with planning progress
-          ├── Characters ─────── library grid → character editor
-          ├── Your stories ───── quick links
-          └── Settings ───────── theme · prompt defaults · backup · snapshots
+Trellis is a **one-screen app**. The frame never scrolls: a top bar, an optional strip (chapters) and bottom tabs stay put, and only the middle pane scrolls. This is the native-app model, chosen over a scrolling document (which lost all context after one swipe) and over sticky headers on a scrolling page (too much stacked chrome on a phone).
 
-Story ────┬── Outline ────────── chapter rail │ chapter panel with beat cards
-          ├── Story bible ────── logline, premise, heat, POV, tense, style guide, rules, world
-          └── Cast & dynamics ── who's in it (+ story-specific notes) · every pair's relationship
-
-⌘K ─────── search across characters, stories, chapters and the full text of beats
-Composer ── modal opened from any beat/chapter/selection: options │ live preview │ copy
 ```
+Library   Stories · Characters · Settings          (bottom tabs on phone, icon rail on desktop)
+Story     ‹  Title ▾   Saved  ✦  ⋯                  (top bar: back, story switcher, AI, menu)
+          [1 Arrival 2/3] [2 Low Tide 0/3] [+]      (chapter strip)
+          Outline · Write · Read · Ideas · Story    (bottom tabs on phone, top tabs on desktop)
+```
+
+| Tab | What it is |
+|---|---|
+| **Outline** | Compact beat rows (status in words, e.g. "154 words" or "Ready"). Tap a row to open the beat editor: a full-screen sheet on phones, the third column on desktop (chapters · beats · inspector). The editor is split into Plan / Direction / Prose, has ‹ › to step between beats, and keeps **Copy prompt** and **Paste result** pinned at the bottom. |
+| **Write** | The copy → Grok → paste loop as its own screen. Two large buttons under your thumb, a preview of the last save with **Undo**, and "One chat" / "Fresh chats". |
+| **Read** | The chapter as a book page, with Copy, Polish and Next chapter. |
+| **Ideas** | Jot ideas and changes; **Weave into the outline** with AI. |
+| **Story** | Setup in one place: essentials, voice (style guide, themes, rules), world, cast and dynamics. |
+
+**AI has one entry point:** the ✦ button in every top bar opens the actions that fit the current screen (brainstorm this chapter, refine this beat, weave ideas, polish, edit the story…). While a request is waiting, a **Waiting for Grok · Paste** banner shows under the top bar and the action appears first in the ✦ sheet.
+
+**Interaction rules the UI follows:**
+- **Back closes overlays.** Sheets and dialogs push a history entry, and the beat editor is URL state, so the phone's Back gesture closes them instead of leaving the page.
+- **Undo instead of "are you sure?".** Deleting a beat, chapter, idea, prose version or cast member, and applying an AI import or builder result, shows an **Undo** toast. Confirmation is kept only for deleting a whole story or character.
+- **Touch first.** Targets are 40–44px on phones. Controls that appear on hover on desktop are always visible on touch devices (a `can-hover` variant). Secondary text meets 4.5:1 contrast.
+- **No explanatory copy.** If something needs a sentence to explain it, the design is changed instead: clearer labels, examples in placeholders, structure, affordances. Inline-editable text has a dashed underline; everything else editable is a visible field.
+- **Saved** appears briefly in the top bar after any write, driven by database hooks.
 
 ### Primary flows
 

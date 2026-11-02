@@ -50,7 +50,6 @@ export function ImportPreview({
       if (on) s.add(c.key)
     })
 
-  const optionalCount = plan.changes.reduce((n, c) => n + (c.beats ?? []).filter((b) => !b.defaultOn).length + (c.defaultOn ? 0 : 1), 0)
 
   return (
     <div className="space-y-4">
@@ -69,9 +68,7 @@ export function ImportPreview({
           ))}
         </div>
       )}
-      <p className="text-[12.5px] text-faint">
-        Tick what you want{optionalCount ? ` — ${optionalCount} suggestion${optionalCount === 1 ? ' starts' : 's start'} unticked` : ''}. Tap an item to read it in full. A snapshot is taken first, so you can undo from Settings.
-      </p>
+
       <ul className="space-y-2.5">
         {plan.changes.map((c) => (
           <ChangeRow

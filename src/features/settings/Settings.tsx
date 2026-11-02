@@ -9,7 +9,8 @@ import { relativeTime } from '@/lib/text'
 import { useTheme, type Theme } from '@/lib/theme'
 import { Button, Segmented, Switch } from '@/components/ui/primitives'
 import { useConfirm, useToast } from '@/components/ui/overlays'
-import { Page, PageHeader } from '@/components/layout/Page'
+import { LibraryScreen } from '@/components/layout/AppShell'
+import { Scroll } from '@/components/layout/Screen'
 import { getGlobalExportDefaults, setGlobalExportDefaults } from '@/features/export/composer-context'
 
 export function Settings() {
@@ -46,8 +47,9 @@ export function Settings() {
   }
 
   return (
-    <Page className="max-w-3xl">
-      <PageHeader eyebrow="Trellis" title="Settings" description="Everything lives in this browser. Nothing is sent anywhere." />
+    <LibraryScreen title="Settings">
+      <Scroll>
+      <div className="mx-auto w-full max-w-2xl px-4 pb-16">
 
       <Block title="Appearance">
         <Segmented<Theme>
@@ -61,7 +63,7 @@ export function Settings() {
         />
       </Block>
 
-      <Block title="Prompt defaults" description="Used for new stories and for one-click copy. Each story remembers its own changes from the composer.">
+      <Block title="Prompt defaults">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <span className="w-32 text-[13px] text-muted">Format</span>
@@ -97,7 +99,7 @@ export function Settings() {
         </div>
       </Block>
 
-      <Block title="Backup" description="Download everything as a single JSON file — keep it in your own cloud drive or a private Git repo.">
+      <Block title="Backup" description="Your work lives only in this browser. Download a backup now and then.">
         <div className="flex flex-wrap gap-2">
           <Button onClick={download}>
             <Download /> Download backup
@@ -121,7 +123,7 @@ export function Settings() {
 
       <Block
         title="Snapshots"
-        description="Taken automatically every few hours and before any import or restore. The latest 20 are kept in this browser."
+        description="Taken automatically, and before every import or restore."
         aside={
           <Button size="sm" onClick={async () => { await takeSnapshot('Manual'); toast('Snapshot saved') }}>
             <History /> Take snapshot
@@ -170,13 +172,15 @@ export function Settings() {
         </Button>
       </Block>
       {element}
-    </Page>
+      </div>
+      </Scroll>
+    </LibraryScreen>
   )
 }
 
 function Block({ title, description, children, aside }: { title: string; description?: string; children: React.ReactNode; aside?: React.ReactNode }) {
   return (
-    <section className="border-t border-line py-8">
+    <section className="border-t border-line py-7 first:border-t-0">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h2 className="font-serif text-[20px]">{title}</h2>

@@ -58,11 +58,6 @@ export function ChapterPasteDialog({
       open
       onOpenChange={(o) => !o && onClose()}
       title={polish ? 'Paste the polished chapter' : 'Paste a whole chapter'}
-      description={
-        polish
-          ? 'Paste the revised chapter. It’s split at the [[Beat N]] markers and saved as a new version of each beat — the originals are kept.'
-          : 'Paste the AI’s reply to the chapter prompt. It’s split at the [[Beat N]] markers and filed under each beat.'
-      }
       className="max-w-2xl max-md:top-0 max-md:left-0 max-md:h-dvh max-md:max-h-none max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0"
     >
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
@@ -108,7 +103,7 @@ export function ChapterPasteDialog({
                   <span className="shrink-0 text-[12px] text-faint tabular-nums">{plural(wordCount(a.text), 'word')}</span>
                 </div>
                 <p className="mt-1 line-clamp-2 font-serif text-[13.5px] text-muted">{a.text}</p>
-                {prose.has(a.beat.id) && <p className="mt-1 text-[11.5px] text-faint">Already written — this becomes a new version (the old one is kept).</p>}
+                {prose.has(a.beat.id) && <p className="mt-1 text-[11.5px] text-faint">New version</p>}
               </li>
             ))}
           </ul>

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AiDialog, type AiDialogStart } from './AiDialog'
 
 /**
@@ -38,10 +38,15 @@ export interface PendingRequest {
   title: string
   targetStoryId: string | null
   at: number
+  /** For a weave request: the inbox ideas it covers, removed once applied. */
+  ideaIds?: string[]
 }
 
 const KEY = 'trellis.aiPending'
 const MAX_AGE = 1000 * 60 * 60 * 24 * 3
+
+const listeners = new Set<() => void>()
+const notify = () => listeners.forEach((l) => l())
 
 export function savePending(p: PendingRequest) {
   try {
@@ -49,14 +54,17 @@ export function savePending(p: PendingRequest) {
   } catch {
     /* ignore */
   }
+  notify()
 }
 
+let cache: { raw: string | null; value: PendingRequest | null } = { raw: null, value: null }
 export function loadPending(): PendingRequest | null {
   try {
     const raw = localStorage.getItem(KEY)
-    if (!raw) return null
-    const p = JSON.parse(raw) as PendingRequest
-    return Date.now() - p.at < MAX_AGE ? p : null
+    if (raw === cache.raw) return cache.value
+    const p = raw ? (JSON.parse(raw) as PendingRequest) : null
+    cache = { raw, value: p && Date.now() - p.at < MAX_AGE ? p : null }
+    return cache.value
   } catch {
     return null
   }
@@ -68,4 +76,20 @@ export function clearPending() {
   } catch {
     /* ignore */
   }
+  notify()
+}
+
+/** The AI request waiting for a pasted reply, if any. Reactive. */
+export function usePending(): PendingRequest | null {
+  return useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb)
+      window.addEventListener('storage', cb)
+      return () => {
+        listeners.delete(cb)
+        window.removeEventListener('storage', cb)
+      }
+    },
+    loadPending,
+  )
 }

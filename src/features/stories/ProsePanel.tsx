@@ -8,7 +8,6 @@ import { cn } from '@/lib/cn'
 import { relativeTime, wordCount } from '@/lib/text'
 import { Button, Field, TextArea } from '@/components/ui/primitives'
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, useConfirm, useToast } from '@/components/ui/overlays'
-import { PASSAGE_TAIL_WORDS } from '@/export/build'
 import { PolishBox, RepeatsNote } from './PolishTools'
 
 /**
@@ -40,22 +39,14 @@ export function ProsePanel({ beat }: { beat: Beat }) {
   if (!active) {
     return (
       <div className="space-y-4">
-        <div className="rounded-2xl border border-dashed border-line-strong px-5 py-7 text-center">
-          <p className="font-serif text-[18px] text-ink">Got the passage back?</p>
-          <p className="mx-auto mt-1 max-w-sm text-[13px] text-muted">Copy it from your writing AI, then paste it here. It stays linked to this beat, and the next beat's prompt will continue from it.</p>
-          <Button variant="primary" className="mt-4" onClick={pasteNew}>
-            <ClipboardPaste /> Paste from clipboard
-          </Button>
-        </div>
-        <Field label="…or paste / type it here">
-          <textarea
-            value={manual}
-            onChange={(e) => setManual(e.target.value)}
-            rows={5}
-            placeholder="Long-press → Paste"
-            className="w-full resize-y rounded-lg border border-line bg-surface px-3 py-2 font-serif text-[16px] leading-relaxed outline-none focus:border-accent/60"
-          />
-        </Field>
+        <textarea
+          value={manual}
+          onChange={(e) => setManual(e.target.value)}
+          rows={8}
+          aria-label="Prose"
+          placeholder="Paste or write the passage"
+          className="w-full resize-y rounded-xl border border-line bg-surface px-3.5 py-3 font-serif text-[17px] leading-relaxed outline-none focus:border-accent/60"
+        />
         {manual.trim() && (
           <Button
             variant="primary"
@@ -138,7 +129,6 @@ export function ProsePanel({ beat }: { beat: Beat }) {
         className="font-serif text-[17px] leading-[1.75]"
         aria-label="Prose"
       />
-      <p className="text-[12px] text-faint">Edits save to this version. The next beat's prompt quotes the last ~{PASSAGE_TAIL_WORDS} words so it continues seamlessly.</p>
       <RepeatsNote text={active.text} />
       <PolishBox
         storyId={beat.storyId}
@@ -156,7 +146,7 @@ export function ProsePanel({ beat }: { beat: Beat }) {
       />
 
       <div className="rounded-xl bg-ok/8 p-4 ring-1 ring-ok/20">
-        <Field label="Recap — what actually happened" hint="1–3 sentences. Used as “story so far” in later prompts, instead of your plan.">
+        <Field label="Recap for later prompts">
           <TextArea value={beat.recap} onCommit={(recap) => updateBeat(beat.id, { recap })} placeholder="Anything the prose added that later beats must respect." />
         </Field>
       </div>

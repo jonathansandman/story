@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 
 @custom-variant dark (&:where(.dark, .dark *));
+/* Hover-revealed controls only on devices that can hover; on touch they stay visible. */
+@custom-variant can-hover (@media (hover: hover) and (pointer: fine));
 
 /*
  * Design tokens. Warm paper in light mode, warm ink in dark mode; a single
@@ -15,8 +17,9 @@
   --line: #e4ddd2;
   --line-strong: #d3cabc;
   --ink: #2a2521;
-  --muted: #6e655c;
-  --faint: #a1978c;
+  --muted: #645b52;
+  /* ≥4.5:1 on --bg: secondary text must stay readable. */
+  --faint: #776d63;
   --accent: #7d3b4d;
   --accent-hover: #6a3141;
   --accent-soft: #f3e6e8;
@@ -34,8 +37,8 @@
   --line: #2f2b28;
   --line-strong: #3d3834;
   --ink: #ece6de;
-  --muted: #a69c91;
-  --faint: #6f675f;
+  --muted: #b0a69b;
+  --faint: #8f857b;
   --accent: #d48a9c;
   --accent-hover: #e09fae;
   --accent-soft: #33232a;
@@ -88,8 +91,14 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
   body {
     @apply bg-bg text-ink font-sans text-[14px] leading-relaxed;
+    overscroll-behavior: none;
     font-feature-settings: 'ss01', 'cv11';
   }
   ::selection {

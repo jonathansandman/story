@@ -24,9 +24,10 @@ export async function loadState(database: TrellisDB = db): Promise<DataState> {
  * If the user unticked a *new* character, every reference to it (cast, POV,
  * chapter/beat characters, relationships) is dropped so nothing dangles.
  */
-export async function applyPlan(plan: Plan, selected: Set<string>, opts: { snapshot?: boolean; database?: TrellisDB } = {}) {
+/** Returns the id of the snapshot taken first (for Undo), if any. */
+export async function applyPlan(plan: Plan, selected: Set<string>, opts: { snapshot?: boolean; database?: TrellisDB } = {}): Promise<string | null> {
   const database = opts.database ?? db
-  if (opts.snapshot !== false) await takeSnapshot('Before AI import')
+  const snapshotId = opts.snapshot !== false ? await takeSnapshot('Before AI import') : null
 
   const chosen = plan.changes.filter((c) => c.required || selected.has(c.key))
   const skippedNewChars = new Set(
@@ -94,4 +95,5 @@ export async function applyPlan(plan: Plan, selected: Set<string>, opts: { snaps
       }
     },
   )
+  return snapshotId
 }

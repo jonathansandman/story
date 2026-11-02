@@ -4,12 +4,14 @@ import { ArrowLeft, ArrowRight, Check, Plus, RotateCcw, Sparkles, Wand2, X } fro
 import { useChapters, useCharacters, useStory } from '@/db/hooks'
 import type { Story } from '@/db/types'
 import { applyPlan, loadState } from '@/ai/apply'
+import { restoreSnapshot } from '@/db/repo'
 import { emptyOptions, mergeOptions, parseOptions, type Choice, type StoryOptions } from '@/ai/options'
 import { buildAiRequest, DENSITIES, LENGTHS, type Picks, type Spark } from '@/ai/requests'
 import { copyText } from '@/lib/clipboard'
 import { cn } from '@/lib/cn'
 import { Button, Field, Segmented } from '@/components/ui/primitives'
 import { useConfirm, useToast } from '@/components/ui/overlays'
+import { Screen, Scroll, TopBar } from '@/components/layout/Screen'
 import { CharacterChips } from '@/features/characters/CharacterPicker'
 import { ImportPreview } from '@/features/ai/ImportPreview'
 import { SendStep } from '@/features/ai/SendStep'
@@ -119,7 +121,7 @@ export function StoryBuilder() {
     }
   }, [st])
   useEffect(() => {
-    document.querySelector('main')?.scrollTo({ top: 0 })
+    document.querySelector('[data-scroll]')?.scrollTo({ top: 0 })
   }, [st.step])
 
   const patch = (p: Partial<BuilderState>) => setSt((s) => ({ ...s, ...p }))
@@ -167,14 +169,14 @@ export function StoryBuilder() {
     if (!outline.plan) return
     setBusy(true)
     try {
-      await applyPlan(outline.plan, outline.selected)
+      const snapshotId = await applyPlan(outline.plan, outline.selected)
       const id = outline.plan.targetStoryId
       try {
         localStorage.removeItem(keyFor(st.spark.storyId))
       } catch {
         /* ignore */
       }
-      toast(storyMode ? 'Outline added' : 'Story created', 'Start writing from any chapter’s Write tab')
+      toast(storyMode ? 'Outline added' : 'Story created', undefined, snapshotId ? { action: { label: 'Undo', run: () => restoreSnapshot(snapshotId) } } : undefined)
       if (id) navigate(`/stories/${id}`)
     } catch (e) {
       toast('Couldn’t create the story', e instanceof Error ? e.message : String(e))
@@ -184,65 +186,69 @@ export function StoryBuilder() {
   }
 
   const stepIdx = STEPS.findIndex((s) => s.id.includes(st.step))
+  const heading =
+    st.step === 'spark' || st.step === 'send-options'
+      ? storyMode
+        ? story?.title || 'Untitled story'
+        : 'What’s the spark?'
+      : st.step === 'choose'
+        ? 'Shape it'
+        : st.step === 'send-outline'
+          ? 'Build the outline'
+          : 'Review'
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pt-6 pb-32 sm:px-8 lg:pt-10">
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 flex items-center gap-2 text-[11.5px] font-semibold tracking-[0.08em] text-faint uppercase">
-            <Wand2 size={13} /> {storyMode ? 'Outline with AI' : 'Story builder'}
-          </div>
-          <h1 className="font-serif text-[30px] leading-tight tracking-tight">
-            {st.step === 'spark' || st.step === 'send-options'
-              ? storyMode
-                ? `Outline “${story?.title || 'Untitled story'}”`
-                : 'What’s the spark?'
-              : st.step === 'choose'
-                ? 'Shape it'
-                : st.step === 'send-outline'
-                  ? 'Build the outline'
-                  : storyMode
-                    ? 'Your outline'
-                    : 'Your story'}
-          </h1>
+    <Screen
+      top={
+        <TopBar
+          left={
+            <Button variant="ghost" size="icon" aria-label="Close" onClick={() => navigate(storyMode && story ? `/stories/${story.id}` : '/')}>
+              <X />
+            </Button>
+          }
+          title={
+            <div className="min-w-0">
+              <p className="text-[11.5px] font-semibold tracking-[0.08em] text-faint uppercase">
+                {storyMode ? 'Outline with AI' : 'New story'} · {stepIdx + 1}/{STEPS.length}
+              </p>
+              <p className="truncate font-serif text-[18px] leading-tight">{heading}</p>
+            </div>
+          }
+          right={
+            (st.spark.text || st.options) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Start over"
+                onClick={async () => {
+                  if (await confirm('Start over?', { body: 'Your spark, options and picks will be cleared.', action: 'Start over' })) setSt(story ? freshFor(story) : fresh())
+                }}
+              >
+                <RotateCcw />
+              </Button>
+            )
+          }
+        />
+      }
+      sub={
+        <div className="flex h-1 shrink-0 gap-0.5" aria-hidden>
+          {STEPS.map((x, i) => (
+            <span key={x.label} className={cn('flex-1', i <= stepIdx ? 'bg-accent' : 'bg-surface-2')} />
+          ))}
         </div>
-        {st !== null && (st.spark.text || st.options) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={async () => {
-              if (await confirm('Start over?', { body: 'Your spark, options and picks will be cleared.', action: 'Start over' })) setSt(story ? freshFor(story) : fresh())
-            }}
-          >
-            <RotateCcw /> Start over
-          </Button>
-        )}
-      </div>
-      <ol className="mb-8 flex items-center gap-2 text-[12px]">
-        {STEPS.map((s, i) => (
-          <li key={s.label} className="flex items-center gap-2">
-            <span
-              className={cn(
-                'flex h-5.5 w-5.5 items-center justify-center rounded-full text-[11px] font-semibold',
-                i < stepIdx ? 'bg-ok text-white' : i === stepIdx ? 'bg-accent text-accent-ink' : 'bg-surface-2 text-faint',
-              )}
-            >
-              {i < stepIdx ? <Check size={11} strokeWidth={3} /> : i + 1}
-            </span>
-            <span className={i === stepIdx ? 'font-medium text-ink' : 'text-faint max-sm:hidden'}>{s.label}</span>
-            {i < STEPS.length - 1 && <span className="h-px w-5 bg-line-strong" />}
-          </li>
-        ))}
-      </ol>
+      }
+    >
+      <div className="flex h-full min-h-0 flex-col">
+        <Scroll className="min-h-0 flex-1">
+          <div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-8">
+
 
       {/* ── Spark ── */}
       {st.step === 'spark' && (
         <div className="space-y-7">
           {storyMode && story && (
             <div className="rounded-2xl border border-line bg-surface p-5 shadow-soft">
-              <p className="text-[11.5px] font-semibold tracking-[0.08em] text-faint uppercase">Working from your story bible</p>
-              <p className="mt-1.5 font-serif text-[20px] leading-snug">{story.title || 'Untitled story'}</p>
+                            <p className="mt-1.5 font-serif text-[20px] leading-snug">{story.title || 'Untitled story'}</p>
               {story.logline && <p className="mt-1 text-[14px] text-muted">{story.logline}</p>}
               {story.premise && <p className="mt-2 line-clamp-4 text-[13.5px] leading-relaxed text-muted">{story.premise}</p>}
               <Link to={`/stories/${story.id}/bible`} className="mt-3 inline-block text-[13px] text-accent hover:underline">
@@ -265,7 +271,7 @@ export function StoryBuilder() {
               placeholder={
                 storyMode
                   ? 'e.g. Start with them already married. Make the middle darker. End on an open question.'
-                  : 'A sentence or a page — a situation, a pair of people, a feeling, a scene you can’t stop thinking about. It doesn’t need to be figured out.'
+                  : 'A situation, a pair of people, a scene you can’t stop thinking about…'
               }
               className="w-full resize-y rounded-2xl border border-line bg-surface px-5 py-4 font-serif text-[18px] leading-relaxed shadow-soft outline-none placeholder:text-faint focus:border-accent/50"
             />
@@ -280,7 +286,7 @@ export function StoryBuilder() {
             )}
           </div>
 
-          <Field label={storyMode ? 'Cast' : 'Bring characters from your library (optional)'}>
+          <Field label={storyMode ? 'Cast' : 'Characters from your library'}>
             <CharacterChips ids={st.spark.characterIds} characters={charMap} onChange={(characterIds) => setSpark({ characterIds })} placeholder="Pick characters" />
           </Field>
 
@@ -311,13 +317,7 @@ export function StoryBuilder() {
       {/* ── Send (options or outline) ── */}
       {(st.step === 'send-options' || st.step === 'send-outline') && (
         <div className="space-y-4">
-          <p className="text-[14px] text-muted">
-            {st.step === 'send-options'
-              ? moreMode
-                ? 'Asking for fresh alternatives. New options are added to the ones you already have.'
-                : 'Grok will reply with options — directions, themes, prose styles, story elements and characters — for you to pick from.'
-              : 'Grok will build the full plan from your picks: story bible, characters, relationships, chapters and beats — with a few optional beats per chapter for you to opt into.'}
-          </p>
+
           <SendStep
             prompt={st.prompt}
             reply={st.reply}
@@ -343,7 +343,7 @@ export function StoryBuilder() {
       {/* ── Choose ── */}
       {st.step === 'choose' && (
         <div className="space-y-10">
-          <Section n={1} title={storyMode ? 'How it unfolds' : 'Direction'} hint="Pick one, or describe a mix in your own words.">
+          <Section n={1} title={storyMode ? 'How it unfolds' : 'Direction'}>
             <div className="grid gap-3">
               {opts.directions.map((d) => (
                 <OptionCard key={d.id} on={st.picks.directionId === d.id} onClick={() => setPicks({ directionId: st.picks.directionId === d.id ? null : d.id })} radio>
@@ -363,11 +363,11 @@ export function StoryBuilder() {
             />
           </Section>
 
-          <Section n={2} title="Themes" hint="Tap all that resonate.">
+          <Section n={2} title="Themes">
             <ChipSet items={opts.themes} selected={st.picks.themeIds} onChange={(themeIds) => setPicks({ themeIds })} custom={st.picks.customThemes} onCustom={(customThemes) => setPicks({ customThemes })} placeholder="Add your own theme" />
           </Section>
 
-          <Section n={3} title="Prose style" hint="Read the samples — pick the one that sounds like your book.">
+          <Section n={3} title="Prose style">
             <div className="grid gap-3">
               {opts.styles.map((s) => (
                 <OptionCard key={s.id} on={st.picks.styleId === s.id} onClick={() => setPicks({ styleId: st.picks.styleId === s.id ? null : s.id })} radio>
@@ -386,7 +386,7 @@ export function StoryBuilder() {
             />
           </Section>
 
-          <Section n={4} title="Story elements" hint="Moments, tropes and set pieces. The AI will place each one where it fits.">
+          <Section n={4} title="Story elements">
             <div className="grid gap-2 sm:grid-cols-2">
               {opts.elements.map((e) => {
                 const on = st.picks.elementIds.includes(e.id)
@@ -402,14 +402,14 @@ export function StoryBuilder() {
           </Section>
 
           {(opts.characters.length > 0 || st.spark.characterIds.length > 0) && (
-            <Section n={5} title="Characters" hint="Pick who’s in it. Your library characters are always included.">
+            <Section n={5} title="Characters">
               <div className="grid gap-2 sm:grid-cols-2">
                 {st.spark.characterIds.map((id) => {
                   const c = charMap.get(id)
                   return c ? (
                     <div key={id} className="rounded-xl border border-line bg-surface-2/50 px-4 py-3">
                       <p className="text-[14px] font-medium">{c.name}</p>
-                      <p className="text-[12px] text-faint">From your library · included</p>
+                      <p className="text-[12px] text-faint">Included</p>
                     </div>
                   ) : null
                 })}
@@ -454,8 +454,10 @@ export function StoryBuilder() {
         <ImportPreview plan={outline.plan} warnings={outline.warnings} selected={outline.selected} onChange={outline.setSelected} />
       )}
 
+          </div>
+        </Scroll>
       {/* ── Sticky footer ── */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-bg/90 backdrop-blur lg:left-[260px]">
+      <div className="shrink-0 border-t border-line bg-surface pb-[env(safe-area-inset-bottom,0px)]">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-4 py-3 sm:px-8">
           <div>
             {st.step === 'send-options' && (
@@ -519,8 +521,9 @@ export function StoryBuilder() {
           </div>
         </div>
       </div>
+      </div>
       {element}
-    </div>
+    </Screen>
   )
 }
 
