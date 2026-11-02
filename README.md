@@ -65,6 +65,30 @@ Composer ── modal opened from any beat/chapter/selection: options │ live p
 5. **Close the loop.** The next beat's prompt quotes the **last ~250 words of the previous beat's prose**, across chapter breaks too, under *"Pick up from here"*, so the new passage continues seamlessly. Add a 1–3 sentence **recap** to a written beat and later prompts use it as "story so far" instead of your original plan.
 6. **Read it.** The **Read** switch on a chapter shows every beat's prose in order as one comfortable reading page, with gaps marked. **Copy chapter text** copies the whole chapter.
 
+### Generating and editing with AI (Grok, Claude, ChatGPT…)
+
+Nothing has to be typed by hand. Every entity can be generated or revised through an external AI, with no API key, by copying and pasting:
+
+| Where | Button | What the AI gets |
+|---|---|---|
+| Stories home | **New story with AI** | Your overview, any library characters you picked, chapter and beat counts. It replies with the story bible, characters, relationships and a full outline. |
+| Story header / Story bible | **Edit with AI** | The story, cast, relationships and chapter list. Optionally every beat and full character sheets. |
+| Character page | **Develop with AI** | The character and their relationships. |
+| Characters / Cast | **New (character) with AI** | Your idea, plus the story and existing cast for context. |
+| Chapter | **Plan beats with AI** / **Edit beats with AI** | The story, cast, other chapters and this chapter with all its beats. |
+| Beat menu | **Refine plan with AI** | The story, cast, the chapter's beat list and this beat. |
+
+**The flow:** describe what you want (or tap a suggestion), then **Copy prompt for AI** → **Open Grok**, paste, send → copy the whole reply → **I have the reply** → **Paste reply** → **Review changes** → **Apply**.
+
+- **The prompt** contains your request, the current data as JSON with ids, the exact reply format, and rules: change only what's asked, keep ids, refer to characters by name, `beatsMode: "replace"` only when giving a complete beat list.
+- **The import is forgiving.** It finds the JSON inside chatty replies and code fences, and repairs smart quotes, trailing commas and comments. It also accepts loose key names (`what_happens`, `emotional_state`), numbers written as strings, appearance as an object, and beats as plain strings.
+- **Matching:** characters by id, then full name, nickname or unique first name. Matching by nickname never renames the character. Chapters by id, then title. Beats by id, then title within the chapter. Names that can't be found produce a warning, never a guess.
+- **The review step** lists every change as **New** or **Update**, with the old value crossed out next to the new one. Beat additions, edits and deletions are shown separately, and deleting a beat with written prose is flagged in red. Untick anything you don't want; if you untick a new character, references to it are removed everywhere.
+- **A snapshot is taken before applying**, so any import can be undone from Settings → Snapshots.
+- **On a phone,** if you leave the app while Grok is thinking, the request is remembered for 3 days. **Import AI reply** (the wand icon in the top bar or sidebar) picks up where you left off and applies to the right story.
+
+Code: [`src/ai/`](src/ai). `requests.ts` builds the prompts, `patch.ts` parses and normalises replies, `plan.ts` produces a pure, tested change plan against current data, and `apply.ts` writes the selected changes in one transaction.
+
 ### Designing for the writer's psychology
 
 The app is meant to make planning feel rewarding and rushing feel slightly uncomfortable, without blocking anything:
@@ -234,10 +258,12 @@ Things that are **always** exported: boundaries, and the consent and check-in no
 src/
   db/          types · Dexie schema · factories · repo (all writes) · hooks (reactive reads) · seed · bootstrap
   export/      document model · bundle loader · prompt builder · renderers · readiness hints · tests
+  ai/          AI round-trip: request prompts · reply parser · change planner · apply · tests
   features/
     stories/     home · story layout & tabs · outline (chapter rail + panel) · beat card · bible · cast
     characters/  library · editor · picker · relationship editor
     export/      composer + quick-copy context
+    ai/          AI dialog (ask → send → paste → review) · import preview
     search/      ⌘K command palette
     settings/    theme · defaults · backup · snapshots
   components/

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Plus, Search, Users } from 'lucide-react'
+import { Plus, Search, Users, Wand2 } from 'lucide-react'
+import { useAi } from '@/features/ai/ai-context'
 import { useCharacters, useStories } from '@/db/hooks'
 import { createCharacter } from '@/db/repo'
 import { cn } from '@/lib/cn'
@@ -12,6 +13,7 @@ export function CharacterLibrary() {
   const characters = useCharacters()
   const stories = useStories()
   const navigate = useNavigate()
+  const { openAi } = useAi()
   const [q, setQ] = useState('')
   const [tag, setTag] = useState<string | null>(null)
 
@@ -40,9 +42,14 @@ export function CharacterLibrary() {
         title="Characters"
         description="Write them once, deeply. Every story can draw on the same people."
         actions={
-          <Button variant="primary" onClick={create}>
-            <Plus /> New character
-          </Button>
+          <>
+            <Button onClick={create}>
+              <Plus /> Blank
+            </Button>
+            <Button variant="primary" onClick={() => openAi({ kind: 'new-character' })}>
+              <Wand2 /> New with AI
+            </Button>
+          </>
         }
       />
 

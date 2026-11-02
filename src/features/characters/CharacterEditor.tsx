@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { ArrowLeft, Copy, CopyPlus, Heart, MoreHorizontal, Plus, Star, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Copy, CopyPlus, Heart, MoreHorizontal, Plus, Star, Trash2, Wand2, X } from 'lucide-react'
+import { useAi } from '@/features/ai/ai-context'
 import { useCharacter, useCharacters, useRelationships, useStories } from '@/db/hooks'
 import { deleteCharacter, duplicateCharacter, getOrCreateRelationship, mutateCharacter, updateCharacter } from '@/db/repo'
 import { CHARACTER_COLORS, makeTrait } from '@/db/factories'
@@ -33,6 +34,7 @@ function Editor({ c }: { c: Character }) {
   const set = (patch: Partial<Character>) => updateCharacter(c.id, patch)
   const navigate = useNavigate()
   const { confirm, element } = useConfirm()
+  const { openAi } = useAi()
 
   return (
     <div className="mx-auto flex w-full max-w-[1280px] gap-10 px-4 py-8 sm:px-8 lg:py-10">
@@ -42,7 +44,10 @@ function Editor({ c }: { c: Character }) {
             <ArrowLeft size={14} /> Characters
           </Link>
           <div className="flex items-center gap-2">
-            <span className="text-[12px] text-faint">Saved {relativeTime(c.updatedAt)}</span>
+            <span className="text-[12px] text-faint max-sm:hidden">Saved {relativeTime(c.updatedAt)}</span>
+            <Button size="sm" onClick={() => openAi({ kind: 'character', characterId: c.id })}>
+              <Wand2 /> Develop with AI
+            </Button>
             <Menu>
               <MenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="More">

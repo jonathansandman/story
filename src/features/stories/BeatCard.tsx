@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRightLeft, Check, CheckSquare, ChevronDown, ClipboardPaste, Copy, CopyPlus, Feather, GripVertical, MoreHorizontal, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowRightLeft, Check, CheckSquare, ChevronDown, ClipboardPaste, Copy, CopyPlus, Feather, GripVertical, MoreHorizontal, Plus, Sparkles, Trash2, Wand2 } from 'lucide-react'
+import { useAi } from '@/features/ai/ai-context'
 import { addDraft, deleteBeat, duplicateBeat, createBeat, moveBeatToChapter, updateBeat } from '@/db/repo'
 import type { Beat, BeatStatus, Chapter, Character } from '@/db/types'
 import { cn } from '@/lib/cn'
@@ -33,6 +34,7 @@ interface BeatCardProps {
 
 export function BeatCard({ beat, index, chapter, chapters, characters, castIds, expanded, onToggle, selected, selecting, onSelect, handle, dragging, proseWords }: BeatCardProps) {
   const { quickCopy, openComposer } = useComposer()
+  const { openAi } = useAi()
   const set = (patch: Partial<Beat>) => updateBeat(beat.id, patch)
   const status = BEAT_STATUS[beat.status]
   const people = (beat.characterIds.length ? beat.characterIds : chapter.characterIds).map((id) => characters.get(id)).filter((c): c is Character => !!c)
@@ -140,6 +142,9 @@ export function BeatCard({ beat, index, chapter, chapters, characters, castIds, 
             <MenuContent>
               <MenuItem icon={<Sparkles />} onSelect={() => openComposer(beat.storyId, { kind: 'beat', beatId: beat.id })}>
                 Compose prompt…
+              </MenuItem>
+              <MenuItem icon={<Wand2 />} onSelect={() => openAi({ kind: 'beat', beatId: beat.id })}>
+                Refine plan with AI…
               </MenuItem>
               <MenuItem icon={<ClipboardPaste />} onSelect={pasteProse}>
                 Paste prose from clipboard

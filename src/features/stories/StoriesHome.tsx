@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { BookOpen, Plus } from 'lucide-react'
+import { BookOpen, Plus, Wand2 } from 'lucide-react'
+import { useAi } from '@/features/ai/ai-context'
 import { db } from '@/db/db'
 import { useCharacters, useStories } from '@/db/hooks'
 import { createStory } from '@/db/repo'
@@ -15,6 +16,7 @@ export function StoriesHome() {
   const stories = useStories()
   const characters = useCharacters()
   const navigate = useNavigate()
+  const { openAi } = useAi()
   const stats = useLiveQuery(async () => {
     const [chapters, beats] = await Promise.all([db.chapters.toArray(), db.beats.toArray()])
     const m = new Map<string, { chapters: number; beats: Record<BeatStatus, number>; total: number }>()
@@ -45,9 +47,14 @@ export function StoriesHome() {
         title="Stories"
         description="Plan slowly, write once. Build the structure here — characters, chapters, beats — then hand each beat to your writing AI with exactly the context it needs."
         actions={
-          <Button variant="primary" onClick={create}>
-            <Plus /> New story
-          </Button>
+          <>
+            <Button onClick={create}>
+              <Plus /> Blank
+            </Button>
+            <Button variant="primary" onClick={() => openAi({ kind: 'new-story' })}>
+              <Wand2 /> New story with AI
+            </Button>
+          </>
         }
       />
 

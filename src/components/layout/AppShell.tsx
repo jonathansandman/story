@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import { BookOpen, Menu as MenuIcon, Moon, Plus, Search, Settings, Sun, SunMoon, Users, X } from 'lucide-react'
+import { BookOpen, Menu as MenuIcon, Moon, Plus, Search, Settings, Sun, SunMoon, Users, Wand2, X } from 'lucide-react'
+import { useAi } from '@/features/ai/ai-context'
 import { useStories } from '@/db/hooks'
 import { createStory } from '@/db/repo'
 import { cn } from '@/lib/cn'
@@ -9,6 +10,7 @@ import { Kbd } from '@/components/ui/primitives'
 import { CommandPalette } from '@/features/search/CommandPalette'
 
 export function AppShell() {
+  const { openImport } = useAi()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const location = useLocation()
@@ -34,7 +36,10 @@ export function AppShell() {
           <MenuIcon size={18} />
         </button>
         <Brand />
-        <button className="ml-auto rounded-lg p-2 text-muted hover:bg-surface-2" onClick={() => setPaletteOpen(true)} aria-label="Search">
+        <button className="ml-auto rounded-lg p-2 text-muted hover:bg-surface-2" onClick={openImport} aria-label="Import AI reply" title="Import AI reply">
+          <Wand2 size={18} />
+        </button>
+        <button className="rounded-lg p-2 text-muted hover:bg-surface-2" onClick={() => setPaletteOpen(true)} aria-label="Search">
           <Search size={18} />
         </button>
       </div>
@@ -66,6 +71,7 @@ function Brand() {
 
 function Sidebar({ open, onClose, onSearch }: { open: boolean; onClose: () => void; onSearch: () => void }) {
   const stories = useStories()
+  const { openImport } = useAi()
   const navigate = useNavigate()
   const [theme, setTheme] = useTheme()
 
@@ -106,6 +112,15 @@ function Sidebar({ open, onClose, onSearch }: { open: boolean; onClose: () => vo
         <NavItem to="/characters" icon={<Users />}>
           Characters
         </NavItem>
+        <button
+          onClick={() => {
+            onClose()
+            openImport()
+          }}
+          className="flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] text-muted transition-colors hover:bg-surface-3/60 hover:text-ink [&_svg]:size-[15px]"
+        >
+          <Wand2 /> Import AI reply
+        </button>
       </nav>
 
       <div className="mt-6 flex items-center justify-between px-5">

@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router'
-import { MoreHorizontal, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Trash2, Wand2 } from 'lucide-react'
+import { useAi } from '@/features/ai/ai-context'
 import { useStory } from '@/db/hooks'
 import { deleteStory, updateStory } from '@/db/repo'
 import type { Story, StoryStatus } from '@/db/types'
@@ -17,6 +18,7 @@ export function StoryLayout() {
   const story = useStory(storyId)
   const navigate = useNavigate()
   const { confirm, element } = useConfirm()
+  const { openAi } = useAi()
 
   if (story === undefined) return null
   if (story === null)
@@ -65,6 +67,9 @@ export function StoryLayout() {
               options={Object.entries(STORY_STATUS).map(([value, label]) => ({ value: value as StoryStatus, label }))}
               className="h-8 w-34 text-[13px] max-sm:hidden"
             />
+            <Button size="sm" onClick={() => openAi({ kind: 'story', storyId: story.id })}>
+              <Wand2 /> <span className="max-sm:hidden">Edit with AI</span>
+            </Button>
             <Menu>
               <MenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Story menu">

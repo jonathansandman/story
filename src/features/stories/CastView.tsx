@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router'
-import { ArrowUpRight, Heart, Plus, X } from 'lucide-react'
+import { ArrowUpRight, Heart, Plus, Wand2, X } from 'lucide-react'
+import { useAi } from '@/features/ai/ai-context'
 import { useCharacters, useRelationships } from '@/db/hooks'
 import { addToCast, getOrCreateRelationship, mutateStory, updateStory } from '@/db/repo'
 import type { CastMember } from '@/db/types'
@@ -19,6 +20,7 @@ export function CastView() {
   const characters = useCharacters()
   const relationships = useRelationships()
   const [editing, setEditing] = useState<string | null>(null)
+  const { openAi } = useAi()
   const byId = useMemo(() => new Map((characters ?? []).map((c) => [c.id, c])), [characters])
 
   const castIds = story.cast.map((m) => m.characterId)
@@ -38,7 +40,7 @@ export function CastView() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-8 lg:py-10">
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-lg text-[13.5px] text-muted">Characters come from your library. Anything specific to this story goes in its notes here — the master sheet stays clean.</p>
         <CharacterPicker
           selected={castIds}
@@ -54,6 +56,9 @@ export function CastView() {
             </Button>
           }
         />
+        <Button onClick={() => openAi({ kind: 'new-character', storyId: story.id })}>
+          <Wand2 /> New character with AI
+        </Button>
       </div>
 
       {story.cast.length === 0 && <EmptyState title="No one cast yet">Add characters from your library, or create a new one from the picker.</EmptyState>}

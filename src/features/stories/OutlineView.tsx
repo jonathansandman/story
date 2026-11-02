@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext, useSearchParams } from 'react-router'
-import { ChevronDown, Copy, GripVertical, MoreHorizontal, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import { ChevronDown, Copy, GripVertical, MoreHorizontal, Plus, Sparkles, Trash2, Wand2, X } from 'lucide-react'
+import { useAi } from '@/features/ai/ai-context'
 import { useChapters, useCharacters, useStoryBeats, useStoryProse } from '@/db/hooks'
 import { createBeat, createChapter, deleteChapter, reorder, updateChapter } from '@/db/repo'
 import type { Beat, Chapter, Character, Draft } from '@/db/types'
@@ -218,6 +219,7 @@ function ChapterPanel({
   const [expanded, setExpanded] = useState<string | null>(initialBeat)
   const [showDetails, setShowDetails] = useState(!chapter.purpose && !chapter.summary ? true : false)
   const { quickCopy, openComposer } = useComposer()
+  const { openAi } = useAi()
   const { confirm, element } = useConfirm()
   const { ordered, ids, reorder: move } = useOptimisticOrder(beats, (next) => reorder('beats', next))
   const pov = chapter.povCharacterId ? characters.get(chapter.povCharacterId) : undefined
@@ -257,6 +259,9 @@ function ChapterPanel({
               </Button>
             </MenuTrigger>
             <MenuContent>
+              <MenuItem icon={<Wand2 />} onSelect={() => openAi({ kind: 'chapter', chapterId: chapter.id, instruction: beats.length ? '' : 'Plan 4–6 beats for this chapter.' })}>
+                Edit chapter with AI…
+              </MenuItem>
               <MenuItem
                 danger
                 icon={<Trash2 />}
@@ -337,6 +342,11 @@ function ChapterPanel({
             { value: 'read', label: writtenWords ? `Read · ${writtenWords.toLocaleString()} words` : 'Read' },
           ]}
         />
+        {beats.length > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => openAi({ kind: 'chapter', chapterId: chapter.id })}>
+            <Wand2 /> Edit beats with AI
+          </Button>
+        )}
       </div>
 
       {mode === 'read' ? (
@@ -349,9 +359,14 @@ function ChapterPanel({
             <p className="mx-auto mt-1.5 max-w-md text-[13px] text-muted">
               A beat is one movement of a scene — a glance, a decision, a confession. Plan three or four before you write a word.
             </p>
-            <Button variant="primary" className="mt-5" onClick={addBeat}>
-              <Plus /> First beat
-            </Button>
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <Button variant="primary" onClick={() => openAi({ kind: 'chapter', chapterId: chapter.id, instruction: 'Plan 4–6 beats for this chapter.' })}>
+                <Wand2 /> Plan beats with AI
+              </Button>
+              <Button onClick={addBeat}>
+                <Plus /> First beat
+              </Button>
+            </div>
           </div>
         ) : (
           <SortableList ids={ids} onReorder={move}>

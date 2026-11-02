@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router'
 import { AppShell } from '@/components/layout/AppShell'
 import { ToastProvider } from '@/components/ui/overlays'
 import { ComposerProvider } from '@/features/export/composer-context'
+import { AiProvider } from '@/features/ai/ai-context'
 import { CharacterEditor } from '@/features/characters/CharacterEditor'
 import { CharacterLibrary } from '@/features/characters/CharacterLibrary'
 import { Settings } from '@/features/settings/Settings'
@@ -15,7 +16,9 @@ function Root() {
   return (
     <ToastProvider>
       <ComposerProvider>
-        <AppShell />
+        <AiProvider>
+          <AppShell />
+        </AiProvider>
       </ComposerProvider>
     </ToastProvider>
   )

@@ -1,4 +1,7 @@
 import { useOutletContext } from 'react-router'
+import { Wand2 } from 'lucide-react'
+import { useAi } from '@/features/ai/ai-context'
+import { Button } from '@/components/ui/primitives'
 import { updateStory } from '@/db/repo'
 import type { Story } from '@/db/types'
 import { Field, Segmented, TagInput, TextArea, TextInput } from '@/components/ui/primitives'
@@ -8,12 +11,18 @@ import type { StoryOutletContext } from './StoryLayout'
 export function StoryBible() {
   const { story } = useOutletContext<StoryOutletContext>()
   const set = (patch: Partial<Story>) => updateStory(story.id, patch)
+  const { openAi } = useAi()
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8 lg:py-10">
-      <p className="mb-8 max-w-xl text-[13.5px] text-muted">
-        Everything here is shared context for every prompt in this story. Fill in what you know; the rest can wait. Shorter and specific beats long and vague.
-      </p>
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-xl text-[13.5px] text-muted">
+          Everything here is shared context for every prompt in this story. Fill in what you know; the rest can wait. Shorter and specific beats long and vague.
+        </p>
+        <Button size="sm" onClick={() => openAi({ kind: 'story', storyId: story.id })}>
+          <Wand2 /> Fill in with AI
+        </Button>
+      </div>
 
       <div className="space-y-6">
         <Field label="Logline" hint="One sentence: who wants what, and what's in the way.">
