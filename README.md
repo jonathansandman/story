@@ -26,7 +26,9 @@ npm run dev        # http://localhost:5173
 
 ### Hosting
 
-It's a static site with no server. `vercel.json` (Vercel) and `public/_redirects` (Netlify) send every route back to `index.html`, so links within the app work when opened directly. On either service, import the repo and the defaults work: build `npm run build`, output `dist`.
+**GitHub Pages:** run `npm run deploy:pages`. It tests, builds with the right base path, adds a `404.html` fallback, and force-pushes `dist/` to the `gh-pages` branch. In the repo, go to Settings → Pages and choose **Deploy from a branch**, then **gh-pages**, **/ (root)**. The site is served at `https://<user>.github.io/<repo>/`. (A GitHub Actions workflow would automate this on every push, but it needs a token with the `workflows` permission to add.)
+
+**Elsewhere:** it's a static site with no server. `vercel.json` (Vercel) and `public/_redirects` (Netlify) send every route back to `index.html`, so links within the app work when opened directly. On either service, import the repo and the defaults work: build `npm run build`, output `dist`.
 
 On first load, Trellis seeds an example story, *The Long Weekend*. It has three characters (a married couple and the first love who lives next door), two defined relationships, three chapters and seven beats at different stages of planning. Use **Settings → Reset to example data** to bring it back.
 

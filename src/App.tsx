@@ -21,7 +21,7 @@ function Root() {
   )
 }
 
-const router = createBrowserRouter([
+const routes = [
   {
     element: <Root />,
     children: [
@@ -41,7 +41,10 @@ const router = createBrowserRouter([
       { path: '*', element: <StoriesHome /> },
     ],
   },
-])
+]
+
+// Match Vite's base so routes work when hosted under a sub-path (GitHub Pages).
+const router = createBrowserRouter(routes, { basename: import.meta.env.BASE_URL.replace(/\/$/, '') || '/' })
 
 export function App() {
   return <RouterProvider router={router} />
