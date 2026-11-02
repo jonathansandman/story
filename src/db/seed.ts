@@ -1,5 +1,5 @@
 import { SCHEMA_VERSION } from './db'
-import { makeBeat, makeChapter, makeCharacter, makeRelationship, makeStory, makeTrait } from './factories'
+import { makeBeat, makeChapter, makeCharacter, makeDraft, makeRelationship, makeStory, makeTrait } from './factories'
 import type { Beat, TrellisBackup } from './types'
 
 /**
@@ -238,6 +238,48 @@ export function buildSeed(): TrellisBackup {
     }),
   ]
 
+  // Prose for the two beats already marked "written", as if pasted back from the writing AI.
+  const prose: Record<string, string> = {
+    b_ch_1_0: `The radio did most of the talking. Somewhere past Doncaster it gave up on music and went to a phone-in about allotments, and neither of them reached to change it.
+
+"I can take over after the services," Theo said.
+
+"I'm fine."
+
+"I know you're fine."
+
+She drove. He watched her hands on the wheel — the knuckles, the small careful corrections she made long before the car needed them. Nine years and he still couldn't tell whether that was skill or fear.
+
+At the petrol station outside Morpeth she stood at the pump with the wind pulling at her coat and twisted her rings off one at a time, the way she did when she was drawing. He saw her put them in her pocket. She didn't put them back on.
+
+"Satnav says forty minutes," she said, getting in.
+
+"Okay."
+
+The rain started at the coast, as if it had been waiting for them.`,
+    b_ch_1_1: `The cottage door stuck, then gave all at once, and Mara stumbled into a room that smelled of cold stone and someone else's woodsmoke.
+
+There was one bedroom. There was one bed.
+
+"I'll take the sofa," Theo said.
+
+"Don't be ridiculous. I'll take it."
+
+They both looked at the sofa, which was two-seated and floral and had clearly been chosen by a person who had never needed to sleep on it.
+
+In the end they lay on either side of the mattress with a careful country of sheet between them. The wind found every gap in the window frame. Theo listened to her breathing and knew, the way he knew a cellist was about to come in flat, that she was awake.
+
+On the nightstand, her rings caught the last of the light from the landing. He looked at them for a long time.
+
+He didn't say anything. Neither did she. It was after two before either of them slept.`,
+  }
+  const drafts = Object.entries(prose).map(([beatId, text]) => {
+    const d = makeDraft({ id: beatId, storyId: story.id }, text, 'pasted', 'First pass')
+    const beat = beats.find((b) => b.id === beatId)
+    if (beat) beat.activeDraftId = d.id
+    return d
+  })
+
   return {
     app: 'trellis',
     schemaVersion: SCHEMA_VERSION,
@@ -247,5 +289,6 @@ export function buildSeed(): TrellisBackup {
     stories: [story],
     chapters: [ch1, ch2, ch3],
     beats,
+    drafts,
   }
 }

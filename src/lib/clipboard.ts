@@ -23,3 +23,12 @@ export function downloadFile(name: string, content: string, type = 'application/
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+/** Read text from the clipboard. Returns null if unsupported or denied (iOS asks via a "Paste" bubble). */
+export async function readClipboard(): Promise<string | null> {
+  try {
+    return await navigator.clipboard.readText()
+  } catch {
+    return null
+  }
+}

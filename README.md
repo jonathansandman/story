@@ -12,7 +12,6 @@ Why not "StoryBible"? A bible is something you *consult*. A trellis is something
 ## Quick start
 
 ```bash
-
 npm install
 npm run dev        # http://localhost:5173
 ```
@@ -56,7 +55,9 @@ Composer ── modal opened from any beat/chapter/selection: options │ live p
    - **Chapter:** **Copy chapter prompt** in the chapter header.
    - **Custom selection:** tick beats (the selection persists across chapters), then use **Copy as prompt** in the floating bar.
    - **Compose…** on any of these opens the composer, where you can change the format, detail level, per-character detail, sections and extra instructions with a live preview. Options are remembered per story, and ⌘/Ctrl+Enter copies.
-4. **Close the loop.** When you've written a beat elsewhere, mark it **Written** and add a 1–3 sentence **recap**. Later prompts use your recap, not your original plan, as "story so far", so continuity follows what actually happened in the prose.
+4. **Paste the prose back.** After the writing AI replies, copy its passage and tap **Paste result** on the beat (or *Paste prose from clipboard* in the beat's menu). The prose is stored on that beat, and the beat is marked **Written**. Each beat has a **Plan / Prose** switch. Pasting again saves a **new version**, and you choose which version is active.
+5. **Close the loop.** The next beat's prompt quotes the **last ~250 words of the previous beat's prose**, across chapter breaks too, under *"Pick up from here"*, so the new passage continues seamlessly. Add a 1–3 sentence **recap** to a written beat and later prompts use it as "story so far" instead of your original plan.
+6. **Read it.** The **Read** switch on a chapter shows every beat's prose in order as one comfortable reading page, with gaps marked. **Copy chapter text** copies the whole chapter.
 
 ### Designing for the writer's psychology
 
@@ -89,7 +90,8 @@ Story ── cast[] ───────┘ CastMember { characterId, role, sto
 | **Relationship** | `characterIds: [a, b]` (sorted), `label`, `dynamic`, `history`, `tension`, `consent` | Stored once per pair rather than copied into both character sheets. |
 | **Story** | `logline`, `premise`, `genre`, `heat`, `pov`, `tense`, `style`, `contentRules`, `world`, `cast[]`, `exportPrefs` | `cast[].storyNotes` adds story-specific details to a character ("in this story she's just been promoted") without editing the master sheet. |
 | **Chapter** | `order`, `title`, `purpose`, `summary`, `povCharacterId`, `characterIds[]`, `setting`, `notes` | `summary` is used as "story so far" in later chapters. |
-| **Beat** | `order`, `title`, `description`, `emotion`, `tone`, `pacing`, `mustInclude`, `mustAvoid`, `characterIds[]`, `targetWords`, `status`, `recap` | An empty `characterIds` list means the beat inherits the chapter's characters. |
+| **Beat** | `order`, `title`, `description`, `emotion`, `tone`, `pacing`, `mustInclude`, `mustAvoid`, `characterIds[]`, `targetWords`, `status`, `recap`, `activeDraftId` | An empty `characterIds` list means the beat inherits the chapter's characters. |
+| **Draft** | `beatId`, `storyId`, `text`, `source` (`pasted` / `typed` / `ai-rewrite`), `note`, `createdAt` | One row per **version** of a beat's prose. The beat's `activeDraftId` marks the current one. Versions are rows, not a single string on the beat, so AI rewrites, comparing versions and multi-beat revision passes can be added later without changing the data model. |
 
 **Why flat tables:** reordering writes only the rows whose position changed. A 300-beat story doesn't mean rewriting one huge document on every keystroke. A future sync layer can also merge row by row.
 
@@ -121,9 +123,10 @@ The order is deliberate. It follows how an editor would brief a ghostwriter, and
 3. **Characters on the page:** one sheet per relevant character, POV character first.
 4. **Relationships:** only pairs where *both* characters are on the page.
 5. **Story so far:** one line per earlier chapter (its summary, or its purpose if there's no summary), then **Earlier in this chapter**: each earlier beat's *recap*, or a shortened version of its plan marked `(planned)`.
-6. **Chapter:** purpose, setting, POV (and the chapter summary for single-beat prompts).
-7. **The beat(s):** what happens, who's on the page, emotional state, tone, pacing, must include, must avoid, length.
-8. **Stop before:** the next beat (or the next chapter, for chapter prompts), explicitly labelled *do not write*. This is the most effective guard against the model writing past the end of the beat.
+6. **Pick up from here:** the last ~250 words of the previous beat's active prose, trimmed to start at a paragraph or sentence boundary. If the previous beat ends the last chapter, the prompt says so and asks for a new chapter.
+7. **Chapter:** purpose, setting, POV (and the chapter summary for single-beat prompts).
+8. **The beat(s):** what happens, who's on the page, emotional state, tone, pacing, must include, must avoid, length.
+9. **Stop before:** the next beat (or the next chapter, for chapter prompts), explicitly labelled *do not write*. This is the most effective guard against the model writing past the end of the beat.
 
 An abridged example, a single beat in Markdown:
 
@@ -249,7 +252,22 @@ src/
 
 ### v1 (this release)
 
-Character library with modular traits, relationships and a live export preview · stories with a story bible and a cast with story-specific notes · chapters and beats with drag-and-drop, status and recaps · prompt engine with 3 formats, 3 detail levels, per-character overrides, continuity, stop markers and readiness hints · one-click copy for a beat, a chapter or a selection, plus the composer · ⌘K full-text search · dark mode · JSON backup and import · automatic snapshots · example seed data.
+Character library with modular traits, relationships and a live export preview · stories with a story bible and a cast with story-specific notes · chapters and beats with drag-and-drop, status and recaps · prose paste-back with versions, a chapter reading view and previous-passage continuity · prompt engine with 3 formats, 3 detail levels, per-character overrides, continuity, stop markers and readiness hints · one-click copy for a beat, a chapter or a selection, plus the composer · ⌘K full-text search · dark mode · JSON backup and import · automatic snapshots · example seed data.
+
+### Mobile
+
+Trellis is built to be used mostly on a phone:
+- Beat actions (copy, menu, drag handle) are always visible on touch screens rather than appearing on hover.
+- The composer opens full-screen with **Copy prompt** at the top and its options folded away behind **Options**.
+- Every field is at least 16px on phones, so iOS doesn't zoom in when you tap into it.
+- The character editor's export preview and relationships move below the form.
+- The reading view uses a comfortable serif page size.
+
+The phone loop is **Copy beat prompt** → switch to Grok → copy the reply → back to Trellis → **Paste result**. On iOS, Safari shows a small "Paste" bubble the first time; that's the browser asking permission. If clipboard access is blocked, there's always a plain box you can long-press and paste into.
+
+### Next: revision (planned)
+
+Prose versions are already stored per beat, so the next step is a **revision workspace**: select one or more beats, write feedback ("make Theo less passive, keep the tide clock"), and either export a *rewrite prompt* that includes the current prose, the plan and the characters, or call a model directly with your own API key. The result is saved as a new `ai-rewrite` version you can compare against the previous one. A continuity check would read the active prose of neighbouring beats and flag contradictions with recaps, character sheets and boundaries.
 
 ### v1.1
 
@@ -257,7 +275,6 @@ Character library with modular traits, relationships and a live export preview �
 - A whole-story **board** view: every chapter as a column of beat cards.
 - **Mentioned-but-absent characters:** export a one-line summary for characters who are referred to but not on the page.
 - Named **prompt presets** ("Grok — explicit", "Claude — XML, brief sheets").
-- A per-beat **prose word count** to track drafted length against target.
 - Snapshot diff ("what changed since…").
 
 ### v2

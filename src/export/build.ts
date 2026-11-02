@@ -14,9 +14,10 @@ import { storyOrder, type ExportScope, type LocatedBeat, type StoryBundle } from
  *   3. Characters      only those on the page, at the chosen detail level
  *   4. Relationships   only between characters who are both on the page
  *   5. Story so far    one line per earlier chapter + earlier beats here
- *   6. Chapter         purpose, setting, POV
- *   7. Beat(s)         what happens, emotion, tone, pacing, include/avoid
- *   8. Stop marker     the next beat, explicitly "do not write"
+ *   6. Pick up here    tail of the previous beat's prose, for a seamless join
+ *   7. Chapter         purpose, setting, POV
+ *   8. Beat(s)         what happens, emotion, tone, pacing, include/avoid
+ *   9. Stop marker     the next beat, explicitly "do not write"
  */
 
 /** Per-character overrides chosen in the composer (not persisted). */
@@ -56,6 +57,7 @@ export function buildPrompt({ bundle, scope, options, overrides = {} }: BuildInp
     charactersSection(bundle, characterIds, options, overrides, primaryPov(bundle, targets)),
     options.includeRelationships && relationshipsSection(bundle.relationships, characterIds, bundle.characters),
     options.includeContinuity && first && continuitySection(bundle, all, first, scope),
+    options.includePreviousPassage && first && previousPassageSection(bundle, all, first),
     ...chapterSections(bundle, targets, scope, options),
     options.includeNextBeat && last && nextSection(bundle, all, last, scope),
   ])
@@ -311,10 +313,57 @@ export function condense(s: string, max = CONDENSE_CHARS): string {
   return end > max * 0.5 ? cut.slice(0, end + 1) : `${cut.replace(/\s+\S*$/, '')}…`
 }
 
-function beatContinuityLine(l: LocatedBeat): string | null {
+function beatContinuityLine(l: LocatedBeat, written: boolean): string | null {
   if (l.beat.recap.trim()) return l.beat.recap.trim()
-  if (l.beat.description.trim()) return `${condense(l.beat.description)} (planned)`
+  if (l.beat.description.trim()) return `${condense(l.beat.description)}${written ? '' : ' (planned)'}`
   return null
+}
+
+/** How much of the previous passage to quote. ~250 words keeps voice and momentum without bloat. */
+export const PASSAGE_TAIL_WORDS = 250
+
+/** The last ~N words of a text, starting at a paragraph or sentence boundary where possible. */
+export function tailWords(text: string, n = PASSAGE_TAIL_WORDS): { text: string; truncated: boolean } {
+  const t = text.trim()
+  const words = t.split(/\s+/)
+  if (words.length <= n) return { text: t, truncated: false }
+  // Find the character offset where the last n words begin.
+  let idx = t.length
+  for (let count = 0; count < n && idx > 0; ) {
+    idx = t.lastIndexOf(' ', idx - 1)
+    if (idx < 0) return { text: t, truncated: false }
+    count++
+  }
+  const window = t.slice(idx).trimStart()
+  // Prefer to start at a paragraph, then a sentence, within the first third of the window.
+  const limit = Math.floor(window.length / 3)
+  const para = window.indexOf('\n')
+  if (para >= 0 && para < limit) return { text: window.slice(para).trim(), truncated: true }
+  const sentence = window.search(/[.!?…]["”’)]?\s+/)
+  if (sentence >= 0 && sentence < limit) {
+    const m = /[.!?…]["”’)]?\s+/.exec(window.slice(sentence))
+    return { text: window.slice(sentence + (m?.[0].length ?? 1)).trim(), truncated: true }
+  }
+  return { text: window, truncated: true }
+}
+
+/**
+ * The end of the prose immediately before the first target beat (across a
+ * chapter break if needed), so the writing model continues it seamlessly.
+ */
+function previousPassageSection(bundle: StoryBundle, all: LocatedBeat[], first: LocatedBeat): PromptSection | null {
+  const i = all.findIndex((l) => l.beat.id === first.beat.id)
+  const prev = i > 0 ? all[i - 1] : undefined
+  const draft = prev && bundle.prose.get(prev.beat.id)
+  if (!prev || !draft) return null
+  const { text: tail, truncated } = tailWords(draft.text)
+  const crossesChapter = prev.chapter.id !== first.chapter.id
+  return section('previous_passage', 'Pick up from here — the end of the previous passage', [
+    text(
+      `${crossesChapter ? `This is the end of ${chapterLabel(prev.chapter, prev.chapterIndex)}. Begin the new chapter` : 'Continue directly from this'} — match its voice and rhythm, and do not repeat or summarise it.`,
+    ),
+    text(`${truncated ? '…' : ''}${tail}`),
+  ])
 }
 
 function continuitySection(
@@ -340,7 +389,7 @@ function continuitySection(
       : all
           .filter((l) => l.chapter.id === first.chapter.id && l.beatIndex < first.beatIndex)
           .map((l) => {
-            const line = beatContinuityLine(l)
+            const line = beatContinuityLine(l, bundle.prose.has(l.beat.id))
             return line ? `${beatLabel(l.beat, l.beatIndex)} — ${line}` : null
           })
 

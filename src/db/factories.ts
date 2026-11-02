@@ -1,5 +1,5 @@
 import { newId } from '@/lib/id'
-import type { Beat, Chapter, Character, ExportOptions, Relationship, Story, Trait } from './types'
+import type { Beat, Chapter, Character, Draft, DraftSource, ExportOptions, Relationship, Story, Trait } from './types'
 
 /**
  * Factories produce fully-populated rows so the rest of the app never has to
@@ -132,6 +132,7 @@ export function makeBeat(storyId: string, chapterId: string, order: number, part
     targetWords: null,
     recap: '',
     status: 'idea',
+    activeDraftId: null,
     createdAt: now,
     updatedAt: now,
     ...partial,
@@ -146,6 +147,12 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   includeContinuity: true,
   includeNextBeat: true,
   includeRelationships: true,
+  includePreviousPassage: true,
   includeWriterNotes: false,
   extraInstructions: '',
+}
+
+export function makeDraft(beat: { id: string; storyId: string }, text: string, source: DraftSource = 'pasted', note = ''): Draft {
+  const now = Date.now()
+  return { id: newId('d_'), beatId: beat.id, storyId: beat.storyId, text, source, note, createdAt: now, updatedAt: now }
 }

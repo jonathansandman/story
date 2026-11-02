@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './db'
 import { chaptersOf } from './repo'
-import type { Beat } from './types'
+import type { Beat, Draft } from './types'
 import { makeBundle, type StoryBundle } from '@/export/bundle'
 
 /**
@@ -45,15 +45,34 @@ export const useSnapshots = () => useLiveQuery(() => db.snapshots.orderBy('creat
 export async function loadBundle(storyId: string): Promise<StoryBundle | null> {
   const story = await db.stories.get(storyId)
   if (!story) return null
-  const [chapters, beats, characters, relationships] = await Promise.all([
+  const [chapters, beats, characters, relationships, drafts] = await Promise.all([
     chaptersOf(storyId),
     db.beats.where('storyId').equals(storyId).toArray(),
     db.characters.toArray(),
     db.relationships.toArray(),
+    db.drafts.where('storyId').equals(storyId).toArray(),
   ])
-  return makeBundle({ story, chapters, beats, characters, relationships })
+  return makeBundle({ story, chapters, beats, characters, relationships, drafts })
 }
 
 /** Reactive bundle — used by the composer for live preview. */
 export const useBundle = (storyId: string | undefined) =>
   useLiveQuery(() => (storyId ? loadBundle(storyId) : null), [storyId])
+
+/** All versions of a beat's prose, newest first. */
+export const useDrafts = (beatId: string | undefined) =>
+  useLiveQuery(async () => (beatId ? (await db.drafts.where('beatId').equals(beatId).sortBy('createdAt')).reverse() : []), [beatId])
+
+/** Active drafts for a whole story: beatId → draft. Used for word counts and the reading view. */
+export const useStoryProse = (storyId: string | undefined) =>
+  useLiveQuery(async () => {
+    const out = new Map<string, Draft>()
+    if (!storyId) return out
+    const [beats, drafts] = await Promise.all([db.beats.where('storyId').equals(storyId).toArray(), db.drafts.where('storyId').equals(storyId).toArray()])
+    const byId = new Map(drafts.map((d) => [d.id, d]))
+    for (const b of beats) {
+      const d = b.activeDraftId ? byId.get(b.activeDraftId) : undefined
+      if (d) out.set(b.id, d)
+    }
+    return out
+  }, [storyId])

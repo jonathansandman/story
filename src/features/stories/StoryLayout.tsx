@@ -63,7 +63,7 @@ export function StoryLayout() {
               value={story.status}
               onChange={(status) => updateStory(story.id, { status })}
               options={Object.entries(STORY_STATUS).map(([value, label]) => ({ value: value as StoryStatus, label }))}
-              className="h-8 w-34 text-[13px]"
+              className="h-8 w-34 text-[13px] max-sm:hidden"
             />
             <Menu>
               <MenuTrigger asChild>

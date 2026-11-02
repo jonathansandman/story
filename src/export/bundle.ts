@@ -1,4 +1,4 @@
-import type { Beat, Chapter, Character, Relationship, Story } from '@/db/types'
+import type { Beat, Chapter, Character, Draft, Relationship, Story } from '@/db/types'
 
 /**
  * Everything the prompt builder needs, loaded once. The builder itself is a
@@ -13,6 +13,8 @@ export interface StoryBundle {
   beatsByChapter: Map<string, Beat[]>
   characters: Map<string, Character>
   relationships: Relationship[]
+  /** beatId → the beat's *active* draft (its current prose). */
+  prose: Map<string, Draft>
 }
 
 export type ExportScope =
@@ -27,6 +29,7 @@ export function makeBundle(input: {
   beats: Beat[]
   characters: Character[]
   relationships: Relationship[]
+  drafts?: Draft[]
 }): StoryBundle {
   const chapters = [...input.chapters].filter((c) => c.storyId === input.story.id).sort((a, b) => a.order - b.order)
   const beatsByChapter = new Map<string, Beat[]>(chapters.map((c) => [c.id, []]))
@@ -38,6 +41,7 @@ export function makeBundle(input: {
     beatsByChapter,
     characters: new Map(input.characters.map((c) => [c.id, c])),
     relationships: input.relationships,
+    prose: activeProse(input.beats, input.drafts ?? []),
   }
 }
 
@@ -54,4 +58,14 @@ export function storyOrder(bundle: StoryBundle): LocatedBeat[] {
   return bundle.chapters.flatMap((chapter, chapterIndex) =>
     (bundle.beatsByChapter.get(chapter.id) ?? []).map((beat, beatIndex) => ({ beat, chapter, chapterIndex, beatIndex })),
   )
+}
+
+function activeProse(beats: Beat[], drafts: Draft[]): Map<string, Draft> {
+  const byId = new Map(drafts.map((d) => [d.id, d]))
+  const out = new Map<string, Draft>()
+  for (const b of beats) {
+    const d = b.activeDraftId ? byId.get(b.activeDraftId) : undefined
+    if (d && d.text.trim()) out.set(b.id, d)
+  }
+  return out
 }

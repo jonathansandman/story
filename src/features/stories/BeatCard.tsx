@@ -1,10 +1,13 @@
-import { useEffect, useRef } from 'react'
-import { ArrowRightLeft, Check, ChevronDown, Copy, CopyPlus, GripVertical, MoreHorizontal, Plus, Sparkles, Trash2 } from 'lucide-react'
-import { deleteBeat, duplicateBeat, createBeat, moveBeatToChapter, updateBeat } from '@/db/repo'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowRightLeft, Check, CheckSquare, ChevronDown, ClipboardPaste, Copy, CopyPlus, Feather, GripVertical, MoreHorizontal, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { addDraft, deleteBeat, duplicateBeat, createBeat, moveBeatToChapter, updateBeat } from '@/db/repo'
 import type { Beat, BeatStatus, Chapter, Character } from '@/db/types'
 import { cn } from '@/lib/cn'
 import { Avatar, Button, Field, Segmented, TextArea, TextInput } from '@/components/ui/primitives'
-import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from '@/components/ui/overlays'
+import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, useToast } from '@/components/ui/overlays'
+import { readClipboard } from '@/lib/clipboard'
+import { wordCount } from '@/lib/text'
+import { ProsePanel } from './ProsePanel'
 import type { HandleProps } from '@/components/ui/Sortable'
 import { CharacterChips } from '@/features/characters/CharacterPicker'
 import { useComposer } from '@/features/export/composer-context'
@@ -24,14 +27,32 @@ interface BeatCardProps {
   onSelect: () => void
   handle: HandleProps
   dragging: boolean
+  /** Word count of the active prose draft, if any. */
+  proseWords: number
 }
 
-export function BeatCard({ beat, index, chapter, chapters, characters, castIds, expanded, onToggle, selected, selecting, onSelect, handle, dragging }: BeatCardProps) {
+export function BeatCard({ beat, index, chapter, chapters, characters, castIds, expanded, onToggle, selected, selecting, onSelect, handle, dragging, proseWords }: BeatCardProps) {
   const { quickCopy, openComposer } = useComposer()
   const set = (patch: Partial<Beat>) => updateBeat(beat.id, patch)
   const status = BEAT_STATUS[beat.status]
   const people = (beat.characterIds.length ? beat.characterIds : chapter.characterIds).map((id) => characters.get(id)).filter((c): c is Character => !!c)
   const ref = useRef<HTMLDivElement>(null)
+  const toast = useToast()
+  const [tab, setTab] = useState<'plan' | 'prose'>(beat.activeDraftId ? 'prose' : 'plan')
+
+  const pasteProse = async () => {
+    const text = await readClipboard()
+    if (!text?.trim()) {
+      setTab('prose')
+      if (!expanded) onToggle()
+      toast('Couldn’t read the clipboard', 'paste into the Prose box instead')
+      return
+    }
+    await addDraft(beat.id, text)
+    toast(beat.activeDraftId ? 'Saved as a new version' : 'Prose saved', `${wordCount(text).toLocaleString()} words`)
+    setTab('prose')
+    if (!expanded) onToggle()
+  }
 
   useEffect(() => {
     if (expanded) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
@@ -52,7 +73,7 @@ export function BeatCard({ beat, index, chapter, chapters, characters, castIds, 
         <button
           {...handle.attributes}
           {...handle.listeners}
-          className="mt-0.5 cursor-grab touch-none rounded p-1 text-line-strong opacity-0 transition-opacity group-hover/beat:opacity-100 hover:text-muted focus:opacity-100 active:cursor-grabbing"
+          className="mt-0.5 cursor-grab touch-none rounded p-1 text-line-strong transition-opacity hover:text-muted focus:opacity-100 active:cursor-grabbing lg:opacity-0 lg:group-hover/beat:opacity-100"
           aria-label={`Reorder beat ${index + 1}`}
         >
           <GripVertical size={15} />
@@ -63,7 +84,7 @@ export function BeatCard({ beat, index, chapter, chapters, characters, castIds, 
           className={cn(
             'mt-1 mr-1 flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border transition-all',
             selected ? 'border-accent bg-accent text-accent-ink' : 'border-line-strong bg-surface',
-            selecting || selected ? 'opacity-100' : 'opacity-0 group-hover/beat:opacity-100 focus:opacity-100',
+            selecting || selected ? 'opacity-100' : 'max-lg:hidden opacity-0 group-hover/beat:opacity-100 focus:opacity-100',
           )}
           aria-label={selected ? 'Deselect beat' : 'Select beat'}
           aria-pressed={selected}
@@ -84,7 +105,7 @@ export function BeatCard({ beat, index, chapter, chapters, characters, castIds, 
               {beat.description || 'What happens here? Click to plan this beat.'}
             </p>
           )}
-          {!expanded && (people.length > 0 || beat.tone || beat.targetWords) && (
+          {!expanded && (people.length > 0 || beat.tone || beat.targetWords || proseWords > 0) && (
             <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11.5px] text-faint">
               {people.length > 0 && (
                 <span className="flex -space-x-1">
@@ -94,12 +115,19 @@ export function BeatCard({ beat, index, chapter, chapters, characters, castIds, 
                 </span>
               )}
               {beat.tone && <span className="max-w-[260px] truncate">{beat.tone}</span>}
-              {beat.targetWords ? <span>· ~{beat.targetWords.toLocaleString()} words</span> : null}
+              {proseWords > 0 ? (
+                <span className="inline-flex items-center gap-1 text-ok">
+                  <Feather size={12} /> {proseWords.toLocaleString()}
+                  {beat.targetWords ? ` / ~${beat.targetWords.toLocaleString()}` : ''} words
+                </span>
+              ) : beat.targetWords ? (
+                <span>· ~{beat.targetWords.toLocaleString()} words</span>
+              ) : null}
             </div>
           )}
         </button>
 
-        <div className={cn('flex items-center gap-0.5 transition-opacity', expanded ? 'opacity-100' : 'opacity-0 group-hover/beat:opacity-100 focus-within:opacity-100')}>
+        <div className={cn('flex items-center gap-0.5 transition-opacity', expanded ? 'opacity-100' : 'lg:opacity-0 lg:group-hover/beat:opacity-100 lg:focus-within:opacity-100')}>
           <Button variant="ghost" size="icon-sm" onClick={() => quickCopy(beat.storyId, { kind: 'beat', beatId: beat.id })} title="Copy beat as prompt" aria-label="Copy beat as prompt">
             <Copy />
           </Button>
@@ -113,6 +141,13 @@ export function BeatCard({ beat, index, chapter, chapters, characters, castIds, 
               <MenuItem icon={<Sparkles />} onSelect={() => openComposer(beat.storyId, { kind: 'beat', beatId: beat.id })}>
                 Compose prompt…
               </MenuItem>
+              <MenuItem icon={<ClipboardPaste />} onSelect={pasteProse}>
+                Paste prose from clipboard
+              </MenuItem>
+              <MenuItem icon={<CheckSquare />} onSelect={onSelect}>
+                {selected ? 'Deselect' : 'Select for multi-beat prompt'}
+              </MenuItem>
+              <MenuSeparator />
               <MenuItem icon={<Plus />} onSelect={() => createBeat(beat.chapterId, {}, beat.order)}>
                 Insert beat below
               </MenuItem>
@@ -138,7 +173,7 @@ export function BeatCard({ beat, index, chapter, chapters, characters, castIds, 
               </MenuItem>
             </MenuContent>
           </Menu>
-          <Button variant="ghost" size="icon-sm" onClick={onToggle} aria-label={expanded ? 'Collapse' : 'Expand'}>
+          <Button variant="ghost" size="icon-sm" onClick={onToggle} aria-label={expanded ? 'Collapse' : 'Expand'} className="max-sm:hidden">
             <ChevronDown className={cn('transition-transform duration-200', expanded && 'rotate-180')} />
           </Button>
         </div>
@@ -146,7 +181,21 @@ export function BeatCard({ beat, index, chapter, chapters, characters, castIds, 
 
       {/* ── Editor ── */}
       {expanded && (
-        <div className="animate-fade-in space-y-5 border-t border-line px-6 pt-5 pb-6 sm:pl-[58px]">
+        <div className="animate-fade-in border-t border-line px-4 pt-4 pb-6 sm:pr-6 sm:pl-[58px]">
+          <div className="mb-5 flex items-center gap-3">
+            <Segmented
+              value={tab}
+              onChange={setTab}
+              options={[
+                { value: 'plan', label: 'Plan' },
+                { value: 'prose', label: proseWords ? `Prose · ${proseWords.toLocaleString()}` : 'Prose' },
+              ]}
+            />
+          </div>
+          {tab === 'prose' ? (
+            <ProsePanel beat={beat} />
+          ) : (
+          <div className="space-y-5">
           <TextInput
             variant="quiet"
             value={beat.title}
@@ -209,19 +258,17 @@ export function BeatCard({ beat, index, chapter, chapters, characters, castIds, 
             </Field>
           </div>
 
-          {beat.status === 'written' && (
-            <div className="rounded-xl bg-ok/8 p-4 ring-1 ring-ok/20">
-              <Field label="Recap — what actually happened" hint="1–3 sentences. Later beats use this for “story so far” instead of your plan.">
-                <TextArea value={beat.recap} onCommit={(recap) => set({ recap })} placeholder="Include anything the prose added that later beats must respect." autoFocus={!beat.recap} />
-              </Field>
-            </div>
+          </div>
           )}
 
-          <div className="flex flex-wrap gap-2 border-t border-line pt-4">
+          <div className="mt-6 flex flex-wrap gap-2 border-t border-line pt-4">
             <Button variant="primary" onClick={() => quickCopy(beat.storyId, { kind: 'beat', beatId: beat.id })}>
               <Copy /> Copy beat prompt
             </Button>
-            <Button onClick={() => openComposer(beat.storyId, { kind: 'beat', beatId: beat.id })}>
+            <Button onClick={pasteProse} title="Paste the passage you got back">
+              <ClipboardPaste /> Paste result
+            </Button>
+            <Button variant="ghost" onClick={() => openComposer(beat.storyId, { kind: 'beat', beatId: beat.id })}>
               <Sparkles /> Compose…
             </Button>
           </div>

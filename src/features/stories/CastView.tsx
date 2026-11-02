@@ -70,7 +70,7 @@ export function CastView() {
                   <Link to={`/characters/${c.id}`} className="inline-flex items-center gap-1 font-serif text-[19px] text-ink hover:text-accent">
                     {c.name || 'Unnamed'} <ArrowUpRight size={14} className="text-faint" />
                   </Link>
-                  <TextInput variant="quiet" value={m.role} onCommit={(role) => setMember(c.id, { role })} placeholder="Role in this story" className="w-auto max-w-56 text-[13px] text-muted" />
+                  <TextInput variant="quiet" value={m.role} onCommit={(role) => setMember(c.id, { role })} placeholder="Role in this story" className="w-auto max-w-56 text-[13px] text-muted max-sm:text-[16px]" />
                 </div>
                 {c.tagline && <p className="font-serif text-[14.5px] text-muted italic">{c.tagline}</p>}
                 <TextArea
@@ -78,7 +78,7 @@ export function CastView() {
                   value={m.storyNotes}
                   onCommit={(storyNotes) => setMember(c.id, { storyNotes })}
                   placeholder="In this story… (exported as part of their sheet)"
-                  className="text-[13px]"
+                  className="text-[13px] max-sm:text-[16px]"
                 />
               </div>
               <button

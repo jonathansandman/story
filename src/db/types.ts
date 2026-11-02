@@ -181,6 +181,28 @@ export interface Beat extends Timestamps {
    */
   recap: string
   status: BeatStatus
+  /** The draft currently treated as "the" prose for this beat. Null = nothing written yet. */
+  activeDraftId: ID | null
+}
+
+/* ─────────────────────────────── Drafts ─────────────────────────────── */
+
+export type DraftSource = 'pasted' | 'typed' | 'ai-rewrite'
+
+/**
+ * A version of the prose for one beat. Pasting new prose creates a new draft;
+ * editing changes the active draft in place. Keeping versions as separate rows
+ * (rather than one string on the beat) is what makes future features cheap:
+ * AI rewrites with feedback, comparing versions, multi-beat revision passes.
+ */
+export interface Draft extends Timestamps {
+  id: ID
+  beatId: ID
+  storyId: ID
+  text: string
+  source: DraftSource
+  /** Optional note: "Grok, first pass", "tightened dialogue". */
+  note: string
 }
 
 /* ────────────────────────────── Export ─────────────────────────────── */
@@ -198,6 +220,8 @@ export interface ExportOptions {
   /** Show the next beat as a "stop here" marker so the AI doesn't overrun. */
   includeNextBeat: boolean
   includeRelationships: boolean
+  /** The tail of the previous beat's prose, so the next passage continues seamlessly. */
+  includePreviousPassage: boolean
   includeWriterNotes: boolean
   /** Free text appended to the task section. */
   extraInstructions: string
@@ -222,4 +246,6 @@ export interface TrellisBackup {
   stories: Story[]
   chapters: Chapter[]
   beats: Beat[]
+  /** Added in schema v2; optional so v1 backups still import. */
+  drafts?: Draft[]
 }

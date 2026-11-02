@@ -162,6 +162,13 @@ function Editor({ c }: { c: Character }) {
         <Section title="Private notes" subtitle="Arcs, ideas, reminders. Never exported unless you switch it on in the composer.">
           <TextArea minRows={3} value={c.notes} onCommit={(notes) => set({ notes })} placeholder="Just for you." />
         </Section>
+
+        {/* Below xl the side rail is hidden, so its tools live at the end of the page. */}
+        <div className="mt-12 space-y-10 border-t border-line pt-8 xl:hidden">
+          <Relationships c={c} />
+          <AppearsIn c={c} />
+          <SheetPreview c={c} />
+        </div>
         {element}
       </div>
 

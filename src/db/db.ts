@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
-import type { Beat, Chapter, Character, Relationship, Snapshot, Story } from './types'
+import type { Beat, Chapter, Character, Draft, Relationship, Snapshot, Story } from './types'
 
 /**
  * IndexedDB via Dexie. All user data lives in the browser; nothing leaves the
@@ -15,6 +15,7 @@ export class TrellisDB extends Dexie {
   chapters!: EntityTable<Chapter, 'id'>
   beats!: EntityTable<Beat, 'id'>
   snapshots!: EntityTable<Snapshot, 'id'>
+  drafts!: EntityTable<Draft, 'id'>
 
   constructor(name = 'trellis') {
     super(name)
@@ -26,9 +27,20 @@ export class TrellisDB extends Dexie {
       beats: 'id, storyId, chapterId, [chapterId+order]',
       snapshots: 'id, createdAt',
     })
+    // v2: prose drafts per beat.
+    this.version(2)
+      .stores({ drafts: 'id, beatId, storyId, createdAt' })
+      .upgrade((tx) =>
+        tx
+          .table('beats')
+          .toCollection()
+          .modify((b: Partial<Beat>) => {
+            b.activeDraftId ??= null
+          }),
+      )
   }
 }
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export const db = new TrellisDB()

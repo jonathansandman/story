@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext, useSearchParams } from 'react-router'
 import { ChevronDown, Copy, GripVertical, MoreHorizontal, Plus, Sparkles, Trash2, X } from 'lucide-react'
-import { useChapters, useCharacters, useStoryBeats } from '@/db/hooks'
+import { useChapters, useCharacters, useStoryBeats, useStoryProse } from '@/db/hooks'
 import { createBeat, createChapter, deleteChapter, reorder, updateChapter } from '@/db/repo'
-import type { Beat, Chapter, Character } from '@/db/types'
+import type { Beat, Chapter, Character, Draft } from '@/db/types'
 import { cn } from '@/lib/cn'
-import { plural } from '@/lib/text'
-import { Button, Field, TextArea, TextInput } from '@/components/ui/primitives'
+import { plural, wordCount } from '@/lib/text'
+import { Button, Field, Segmented, TextArea, TextInput } from '@/components/ui/primitives'
 import { Menu, MenuContent, MenuItem, MenuTrigger, useConfirm } from '@/components/ui/overlays'
 import { SortableItem, SortableList, useOptimisticOrder } from '@/components/ui/Sortable'
 import { CharacterChips, CharacterPicker } from '@/features/characters/CharacterPicker'
 import { useComposer } from '@/features/export/composer-context'
+import { ReadingView } from './ReadingView'
 import { BeatCard } from './BeatCard'
 import { BEAT_STATUS, BEAT_STATUSES } from './status'
 import type { StoryOutletContext } from './StoryLayout'
@@ -25,6 +26,7 @@ export function OutlineView() {
   const chapters = useChapters(story.id)
   const beats = useStoryBeats(story.id)
   const characters = useCharacters()
+  const prose = useStoryProse(story.id)
   const [params, setParams] = useSearchParams()
   const [selected, setSelected] = useState<string[]>([])
   const { quickCopy, openComposer } = useComposer()
@@ -38,7 +40,7 @@ export function OutlineView() {
 
   const selectChapter = (id: string) => setParams({ chapter: id }, { replace: true })
 
-  if (!chapters || !beats) return null
+  if (!chapters || !beats || !prose) return null
 
   // Selection is shown in story order regardless of click order.
   const orderedSelection = chapters.flatMap((c) => (beats.get(c.id) ?? []).filter((b) => selected.includes(b.id)).map((b) => b.id))
@@ -55,6 +57,7 @@ export function OutlineView() {
             index={chapters.indexOf(chapter)}
             chapters={chapters}
             beats={beats.get(chapter.id) ?? []}
+            prose={prose}
             characters={charMap}
             castIds={castIds}
             initialBeat={beatParam}
@@ -73,7 +76,7 @@ export function OutlineView() {
 
       {orderedSelection.length > 0 && (
         <div className="fixed inset-x-0 bottom-6 z-30 flex justify-center px-4">
-          <div className="flex items-center gap-2 rounded-2xl border border-line bg-surface py-2 pr-2 pl-4 shadow-lift animate-rise">
+          <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-line bg-surface py-2 pr-2 pl-4 shadow-lift animate-rise">
             <span className="text-[13px] text-ink">
               <strong className="font-semibold">{orderedSelection.length}</strong> beat{orderedSelection.length === 1 ? '' : 's'} selected
             </span>
@@ -191,6 +194,7 @@ function ChapterPanel({
   index,
   chapters,
   beats,
+  prose,
   characters,
   castIds,
   initialBeat,
@@ -202,6 +206,7 @@ function ChapterPanel({
   index: number
   chapters: Chapter[]
   beats: Beat[]
+  prose: Map<string, Draft>
   characters: Map<string, Character>
   castIds: string[]
   initialBeat: string | null
@@ -217,6 +222,8 @@ function ChapterPanel({
   const { ordered, ids, reorder: move } = useOptimisticOrder(beats, (next) => reorder('beats', next))
   const pov = chapter.povCharacterId ? characters.get(chapter.povCharacterId) : undefined
   const words = beats.reduce((n, b) => n + (b.targetWords ?? 0), 0)
+  const writtenWords = beats.reduce((n, b) => n + wordCount(prose.get(b.id)?.text ?? ''), 0)
+  const [mode, setMode] = useState<'plan' | 'read'>('plan')
 
   useEffect(() => {
     if (initialBeat) setExpanded(initialBeat)
@@ -233,7 +240,8 @@ function ChapterPanel({
       <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
         <span className="min-w-0 text-[11.5px] font-semibold tracking-[0.08em] text-faint uppercase">
           Chapter {index + 1} · {plural(beats.length, 'beat')}
-          {words > 0 && ` · ~${words.toLocaleString()} words planned`}
+          {words > 0 && ` · ~${words.toLocaleString()} planned`}
+          {writtenWords > 0 && ` · ${writtenWords.toLocaleString()} written`}
         </span>
         <div className="flex items-center gap-1.5">
           <Button size="sm" variant="primary" onClick={() => quickCopy(chapter.storyId, { kind: 'chapter', chapterId: chapter.id })}>
@@ -320,8 +328,21 @@ function ChapterPanel({
         </div>
       )}
 
-      {/* Beats */}
-      <div className="mt-8">
+      <div className="mt-8 mb-4 flex items-center justify-between gap-3">
+        <Segmented
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'plan', label: 'Beats' },
+            { value: 'read', label: writtenWords ? `Read · ${writtenWords.toLocaleString()} words` : 'Read' },
+          ]}
+        />
+      </div>
+
+      {mode === 'read' ? (
+        <ReadingView chapter={chapter} beats={beats} prose={prose} />
+      ) : (
+      <div>
         {beats.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line-strong px-8 py-12 text-center">
             <p className="font-serif text-[18px] text-ink">No beats yet</p>
@@ -352,6 +373,7 @@ function ChapterPanel({
                       onSelect={() => setSelected((s) => (s.includes(b.id) ? s.filter((x) => x !== b.id) : [...s, b.id]))}
                       handle={handle}
                       dragging={dragging}
+                      proseWords={wordCount(prose.get(b.id)?.text ?? '')}
                     />
                   )}
                 </SortableItem>
@@ -368,6 +390,7 @@ function ChapterPanel({
           </button>
         )}
       </div>
+      )}
       {element}
     </div>
   )

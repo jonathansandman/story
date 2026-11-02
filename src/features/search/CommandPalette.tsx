@@ -38,13 +38,17 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
 
   const data = useLiveQuery(async () => {
     if (!open) return null
-    const [stories, chapters, beats, characters] = await Promise.all([
+    const [stories, chapters, beats, characters, drafts] = await Promise.all([
       db.stories.toArray(),
       db.chapters.toArray(),
       db.beats.toArray(),
       db.characters.toArray(),
+      db.drafts.toArray(),
     ])
-    return { stories, chapters, beats, characters }
+    // Only the active version of each beat's prose is searchable.
+    const draftText = new Map(drafts.map((d) => [d.id, d.text]))
+    const prose = new Map(beats.map((b) => [b.id, (b.activeDraftId && draftText.get(b.activeDraftId)) || '']))
+    return { stories, chapters, beats, characters, prose }
   }, [open])
 
   const results = useMemo<Result[]>(() => {
@@ -82,7 +86,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         title: b.title || b.description.slice(0, 60) || 'Untitled beat',
         subtitle: `${storyTitle.get(b.storyId) ?? ''} · ${chapterTitle.get(b.chapterId) ?? ''}`,
         href: `/stories/${b.storyId}?chapter=${b.chapterId}&beat=${b.id}`,
-        hay: [b.title, b.description, b.emotion, b.tone, b.mustInclude, b.recap].join(' '),
+        hay: [b.title, b.description, b.emotion, b.tone, b.mustInclude, b.recap, data.prose.get(b.id) ?? ''].join(' '),
       })),
     ]
     const filtered = q.trim() ? all.filter((r) => matches(`${r.title} ${r.hay}`, q)) : all.filter((r) => r.kind !== 'beat')
@@ -119,8 +123,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               setActive((a) => Math.max(a - 1, 0))
             } else if (e.key === 'Enter') go(results[active])
           }}
-          placeholder="Search characters, stories, chapters, beats…"
-          className="h-13 flex-1 bg-transparent text-[15px] outline-none"
+          placeholder="Search characters, stories, beats, prose…"
+          className="h-13 flex-1 bg-transparent text-[15px] outline-none max-sm:text-[16px]"
         />
       </div>
       <div ref={listRef} className="max-h-[50vh] overflow-y-auto p-2">

@@ -3,7 +3,7 @@ import { buildSeed } from '@/db/seed'
 import { DEFAULT_EXPORT_OPTIONS } from '@/db/factories'
 import type { ExportOptions } from '@/db/types'
 import { makeBundle } from './bundle'
-import { buildPrompt, characterSheet, condense } from './build'
+import { buildPrompt, characterSheet, condense, tailWords } from './build'
 import { render } from './render'
 
 const seed = buildSeed()
@@ -106,5 +106,26 @@ describe('condense', () => {
   it('cuts at a sentence boundary when possible', () => {
     const s = 'First sentence here is fine. ' + 'word '.repeat(80)
     expect(condense(s, 50)).toBe('First sentence here is fine.')
+  })
+})
+
+describe('previous passage', () => {
+  it('quotes the tail of the preceding beat’s prose and stops quoting at a boundary', () => {
+    const r = buildPrompt({ bundle, scope: { kind: 'beat', beatId: 'b_ch_1_2' }, options: opts() })
+    const md = render(r.doc, 'markdown')
+    expect(md).toContain('Pick up from here')
+    expect(md).toContain('It was after two before either of them slept.')
+  })
+  it('crosses chapter boundaries', () => {
+    const r = buildPrompt({ bundle, scope: { kind: 'chapter', chapterId: 'ch_2' }, options: opts() })
+    // Previous beat (ch1 beat 3) has no prose, so nothing is quoted.
+    expect(render(r.doc, 'markdown')).not.toContain('Pick up from here')
+  })
+  it('tailWords trims long text to roughly n words', () => {
+    const long = Array.from({ length: 50 }, (_, i) => `Sentence number ${i} is here.`).join(' ')
+    const { text, truncated } = tailWords(long, 20)
+    expect(truncated).toBe(true)
+    expect(text.startsWith('Sentence')).toBe(true)
+    expect(text.split(/\s+/).length).toBeLessThanOrEqual(20)
   })
 })

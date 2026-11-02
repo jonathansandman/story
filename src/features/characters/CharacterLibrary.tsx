@@ -53,7 +53,7 @@ export function CharacterLibrary() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search names, traits, desires…"
-            className="h-8.5 w-full rounded-lg border border-line bg-surface pr-3 pl-8.5 text-[13px] outline-none focus:border-accent/60"
+            className="h-8.5 w-full rounded-lg border border-line bg-surface pr-3 pl-8.5 text-[13px] outline-none max-sm:text-[16px] focus:border-accent/60"
           />
         </div>
         {tags.length > 0 && (

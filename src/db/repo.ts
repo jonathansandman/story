@@ -1,6 +1,6 @@
 import { db, SCHEMA_VERSION, type TrellisDB } from './db'
-import { makeBeat, makeChapter, makeCharacter, makeRelationship, makeStory, sortPair } from './factories'
-import type { Beat, Chapter, Character, Relationship, Story, TrellisBackup } from './types'
+import { makeBeat, makeChapter, makeCharacter, makeDraft, makeRelationship, makeStory, sortPair } from './factories'
+import type { Beat, Chapter, Character, Draft, DraftSource, Relationship, Story, TrellisBackup } from './types'
 import { newId } from '@/lib/id'
 
 /**
@@ -122,7 +122,8 @@ export function mutateStory(id: string, fn: (s: Story) => void) {
 }
 
 export async function deleteStory(id: string) {
-  await db.transaction('rw', db.stories, db.chapters, db.beats, async () => {
+  await db.transaction('rw', [db.stories, db.chapters, db.beats, db.drafts], async () => {
+    await db.drafts.where('storyId').equals(id).delete()
     await db.beats.where('storyId').equals(id).delete()
     await db.chapters.where('storyId').equals(id).delete()
     await db.stories.delete(id)
@@ -158,7 +159,9 @@ export async function updateChapter(id: string, patch: Patch<Chapter>) {
 }
 
 export async function deleteChapter(id: string) {
-  await db.transaction('rw', db.chapters, db.beats, async () => {
+  await db.transaction('rw', db.chapters, db.beats, db.drafts, async () => {
+    const beatIds = await db.beats.where('chapterId').equals(id).primaryKeys()
+    await db.drafts.where('beatId').anyOf(beatIds).delete()
     await db.beats.where('chapterId').equals(id).delete()
     await db.chapters.delete(id)
   })
@@ -190,7 +193,10 @@ export async function updateBeat(id: string, patch: Patch<Beat>) {
 }
 
 export async function deleteBeat(id: string) {
-  await db.beats.delete(id)
+  await db.transaction('rw', db.beats, db.drafts, async () => {
+    await db.drafts.where('beatId').equals(id).delete()
+    await db.beats.delete(id)
+  })
 }
 
 export async function duplicateBeat(id: string): Promise<Beat | undefined> {
@@ -199,7 +205,7 @@ export async function duplicateBeat(id: string): Promise<Beat | undefined> {
   const { id: _id, createdAt: _c, updatedAt: _u, order: _o, ...rest } = src
   return createBeat(
     src.chapterId,
-    { ...rest, title: src.title ? `${src.title} (copy)` : '', status: 'idea', recap: '' },
+    { ...rest, title: src.title ? `${src.title} (copy)` : '', status: 'idea', recap: '', activeDraftId: null },
     src.order,
   )
 }
@@ -226,6 +232,45 @@ export async function reorder(table: 'chapters' | 'beats', orderedIds: string[])
   })
 }
 
+/* ───────────── Drafts (prose) ───────────── */
+
+/**
+ * Save prose for a beat as a new version and make it active. If the beat was
+ * still being planned, it moves to "written" — the writer just told us so.
+ */
+export async function addDraft(beatId: string, text: string, source: DraftSource = 'pasted', note = ''): Promise<Draft | undefined> {
+  const beat = await db.beats.get(beatId)
+  if (!beat || !text.trim()) return
+  const draft = makeDraft(beat, text.trim(), source, note)
+  await db.transaction('rw', db.beats, db.drafts, async () => {
+    await db.drafts.add(draft)
+    await db.beats.update(beatId, touch({ activeDraftId: draft.id, status: 'written' as const }))
+  })
+  return draft
+}
+
+export function updateDraft(id: string, patch: Partial<Pick<Draft, 'text' | 'note'>>) {
+  return db.drafts.update(id, touch(patch))
+}
+
+export function setActiveDraft(beatId: string, draftId: string | null) {
+  return db.beats.update(beatId, touch({ activeDraftId: draftId }))
+}
+
+/** Delete a version; if it was active, fall back to the newest remaining one. */
+export async function deleteDraft(id: string) {
+  await db.transaction('rw', db.beats, db.drafts, async () => {
+    const d = await db.drafts.get(id)
+    if (!d) return
+    await db.drafts.delete(id)
+    const beat = await db.beats.get(d.beatId)
+    if (beat?.activeDraftId === id) {
+      const rest = await db.drafts.where('beatId').equals(d.beatId).sortBy('createdAt')
+      await db.beats.update(d.beatId, { activeDraftId: rest.at(-1)?.id ?? null, ...(rest.length ? {} : { status: 'ready' as const }) })
+    }
+  })
+}
+
 /* ───────────── Helpers ───────────── */
 
 export function beatsOf(chapterId: string, database: TrellisDB = db) {
@@ -243,14 +288,15 @@ async function touchStory(storyId: string) {
 /* ───────────── Backup / restore / snapshots ───────────── */
 
 export async function exportBackup(database: TrellisDB = db): Promise<TrellisBackup> {
-  const [characters, relationships, stories, chapters, beats] = await Promise.all([
+  const [characters, relationships, stories, chapters, beats, drafts] = await Promise.all([
     database.characters.toArray(),
     database.relationships.toArray(),
     database.stories.toArray(),
     database.chapters.toArray(),
     database.beats.toArray(),
+    database.drafts.toArray(),
   ])
-  return { app: 'trellis', schemaVersion: SCHEMA_VERSION, exportedAt: Date.now(), characters, relationships, stories, chapters, beats }
+  return { app: 'trellis', schemaVersion: SCHEMA_VERSION, exportedAt: Date.now(), characters, relationships, stories, chapters, beats, drafts }
 }
 
 export function isBackup(value: unknown): value is TrellisBackup {
@@ -263,7 +309,7 @@ export async function importBackup(backup: TrellisBackup, database: TrellisDB = 
   if (!isBackup(backup)) throw new Error('This file is not a Trellis backup.')
   await database.transaction(
     'rw',
-    [database.characters, database.relationships, database.stories, database.chapters, database.beats],
+    [database.characters, database.relationships, database.stories, database.chapters, database.beats, database.drafts],
     async () => {
       await Promise.all([
         database.characters.clear(),
@@ -271,12 +317,15 @@ export async function importBackup(backup: TrellisBackup, database: TrellisDB = 
         database.stories.clear(),
         database.chapters.clear(),
         database.beats.clear(),
+        database.drafts.clear(),
       ])
       await database.characters.bulkAdd(backup.characters)
       await database.relationships.bulkAdd(backup.relationships ?? [])
       await database.stories.bulkAdd(backup.stories)
       await database.chapters.bulkAdd(backup.chapters ?? [])
-      await database.beats.bulkAdd(backup.beats)
+      // v1 backups predate drafts: default the new field.
+      await database.beats.bulkAdd(backup.beats.map((b) => ({ ...b, activeDraftId: b.activeDraftId ?? null })))
+      await database.drafts.bulkAdd(backup.drafts ?? [])
     },
   )
 }

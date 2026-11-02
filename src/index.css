@@ -104,6 +104,15 @@
   input {
     @apply placeholder:text-faint;
   }
+  /* iOS zooms the page when focusing a field under 16px. Fields default to 16px
+     on phones; explicitly small fields add `max-sm:text-[16px]` themselves. */
+  @media (max-width: 640px) {
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--line-strong) transparent;

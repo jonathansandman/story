@@ -57,7 +57,7 @@ export function CharacterPicker({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Find a character…"
-            className="h-8 flex-1 bg-transparent text-[13px] outline-none"
+            className="h-8 flex-1 bg-transparent text-[13px] outline-none max-sm:text-[16px]"
           />
         </div>
         <div className="max-h-64 overflow-y-auto py-1">
