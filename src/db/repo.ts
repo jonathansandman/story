@@ -2,6 +2,7 @@ import { db, SCHEMA_VERSION, type TrellisDB } from './db'
 import { makeBeat, makeChapter, makeCharacter, makeDraft, makeRelationship, makeStory, sortPair } from './factories'
 import type { Beat, Chapter, Character, Draft, DraftSource, Relationship, Story, TrellisBackup } from './types'
 import { newId } from '@/lib/id'
+import { stripMarkers } from '@/export/split'
 
 /**
  * All writes go through this module. Components never call `db.table.put`
@@ -240,8 +241,10 @@ export async function reorder(table: 'chapters' | 'beats', orderedIds: string[])
  */
 export async function addDraft(beatId: string, text: string, source: DraftSource = 'pasted', note = ''): Promise<Draft | undefined> {
   const beat = await db.beats.get(beatId)
-  if (!beat || !text.trim()) return
-  const draft = makeDraft(beat, text.trim(), source, note)
+  // Some models add [[Beat N]] markers even to single-beat replies; never store them.
+  const clean = stripMarkers(text)
+  if (!beat || !clean) return
+  const draft = makeDraft(beat, clean, source, note)
   await db.transaction('rw', db.beats, db.drafts, async () => {
     await db.drafts.add(draft)
     await db.beats.update(beatId, touch({ activeDraftId: draft.id, status: 'written' as const }))

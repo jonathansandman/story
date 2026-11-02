@@ -150,6 +150,8 @@ function taskSection(
   const pov = targets[0]?.chapter.povCharacterId
   const povName = pov ? bundle.characters.get(pov)?.name : undefined
   const words = targets.reduce((sum, t) => sum + (t.beat.targetWords ?? 0), 0)
+  // Whole-chapter prompts ask for beat markers so the reply can be split back into beats.
+  const markers = scope.kind === 'chapter' && targets.length > 1
 
   let what: string
   if (scope.kind === 'beat') {
@@ -174,7 +176,12 @@ function taskSection(
     words > 0 ? `Length: roughly ${words.toLocaleString('en-US')} words.` : null,
     'Stay in character: honour each character\'s voice, desires and boundaries as written.',
     options.includeNextBeat ? 'Do not write past the point marked "Stop before".' : null,
-    'Output prose only — no headings, beat labels, summaries, or commentary.',
+    markers
+      ? `Put a marker on its own line before each beat: ${targets
+          .slice(0, 3)
+          .map((t) => `[[Beat ${t.beatIndex + 1}]]`)
+          .join(', ')}${targets.length > 3 ? ', …' : ''} (matching the beat numbers below). They are only used to file your text in my app and will be removed. Apart from these markers, output prose only — no headings, summaries or commentary.`
+      : 'Output prose only — no headings, beat labels, summaries, or commentary.',
   ])
 
   return section('task', 'Your task', [text(what), list(rules), text(options.extraInstructions)])
@@ -500,4 +507,68 @@ function nextSection(bundle: StoryBundle, all: LocatedBeat[], last: LocatedBeat,
   return section('stop_before', 'Stop before (next beat — do not write)', [
     text(`${beatLabel(next.beat, next.beatIndex)}${where} — ${line}`),
   ])
+}
+
+/* ───────────────────────────── Follow-up (same chat) ───────────────────────────── */
+
+/**
+ * A short prompt for continuing in the *same* AI chat: the model already has
+ * the story bible, characters and its own previous passage, so we only send
+ * the next beat, any characters new to the page, and the stop marker.
+ */
+export function buildFollowUp(bundle: StoryBundle, beatId: string, options: ExportOptions): BuildResult {
+  const all = storyOrder(bundle)
+  const i = all.findIndex((l) => l.beat.id === beatId)
+  const cur = all[i]
+  if (!cur) return { doc: { title: 'Beat not found', sections: [] }, characterIds: [], beats: [] }
+  const prev = all[i - 1]
+  const newChapter = !prev || prev.chapter.id !== cur.chapter.id
+
+  const onPage = resolveCharacters(bundle, { kind: 'beat', beatId }, [cur])
+  // Anyone not on the page earlier in this chapter gets a brief sheet.
+  const seen = new Set(
+    all
+      .filter((l) => l.chapter.id === cur.chapter.id && l.beatIndex < cur.beatIndex)
+      .flatMap((l) => resolveCharacters(bundle, { kind: 'beat', beatId: l.beat.id }, [l])),
+  )
+  const fresh = newChapter ? onPage : onPage.filter((id) => !seen.has(id))
+  const words = cur.beat.targetWords
+
+  const task = section('task', 'Next', [
+    text(
+      newChapter
+        ? `Now start ${chapterLabel(cur.chapter, cur.chapterIndex)}, with the beat below. Same story, style and rules as before.`
+        : 'Continue directly from the end of your last passage with the next beat, below. Same point of view, tense, style and rules as before — don’t repeat or summarise what you already wrote.',
+    ),
+    list([
+      words ? `Length: roughly ${words.toLocaleString('en-US')} words.` : null,
+      options.includeNextBeat ? 'Stop at the point marked "Stop before".' : null,
+      'Output prose only — no headings, summaries or commentary.',
+    ]),
+    text(options.extraInstructions),
+  ])
+
+  const sections = compact<PromptSection>([
+    task,
+    newChapter && section('chapter', chapterLabel(cur.chapter, cur.chapterIndex), [chapterBrief(bundle, cur.chapter, true)]),
+    fresh.length > 0 &&
+      section(
+        'characters',
+        newChapter ? 'Characters on the page' : 'New on the page',
+        fresh.map((id) => {
+          const c = bundle.characters.get(id)
+          if (!c) return null
+          const cast = bundle.story.cast.find((m) => m.characterId === id)
+          return characterSheet(c, 'brief', { role: cast?.role ?? '', storyNotes: cast?.storyNotes ?? '' })
+        }),
+      ),
+    { ...beatNode(bundle, cur), title: `The beat — ${beatLabel(cur.beat, cur.beatIndex)}` },
+    options.includeNextBeat && nextSection(bundle, all, cur, { kind: 'beat', beatId }),
+  ])
+
+  return {
+    doc: { title: `Next: Chapter ${cur.chapterIndex + 1}, ${beatLabel(cur.beat, cur.beatIndex)}`, sections },
+    characterIds: onPage,
+    beats: [cur],
+  }
 }

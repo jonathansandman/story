@@ -65,6 +65,25 @@ Composer ── modal opened from any beat/chapter/selection: options │ live p
 5. **Close the loop.** The next beat's prompt quotes the **last ~250 words of the previous beat's prose**, across chapter breaks too, under *"Pick up from here"*, so the new passage continues seamlessly. Add a 1–3 sentence **recap** to a written beat and later prompts use it as "story so far" instead of your original plan.
 6. **Read it.** The **Read** switch on a chapter shows every beat's prose in order as one comfortable reading page, with gaps marked. **Copy chapter text** copies the whole chapter.
 
+### Writing the prose with Grok
+
+Each chapter has three modes: **Plan · Write · Read**.
+
+**Write** is a guided loop that works well on a phone:
+
+1. **Copy prompt** for the current beat → **Grok** → paste and send.
+2. Copy Grok's reply → **Paste Grok's reply**. It's saved on that beat, and the view moves on to the next unwritten beat.
+3. Repeat. A progress bar shows which beats are written; tap any segment to jump to that beat.
+
+- **Same chat** (default): the first prompt carries the full brief (task, story bible, characters, relationships, story so far, end of the previous passage, the beat, and where to stop). Every following beat gets a **short follow-up**, about a sixth of the size: the next beat, brief sheets for anyone new to the page, and the stop marker. The Grok conversation stays focused instead of repeating the bible every time. If you edit a passage in Trellis, switch to **New chat each** so Grok works from your version.
+- **New chat each:** every beat gets the full brief, including the last ~250 words of the previous passage.
+
+**Whole chapter in one go:** **Copy chapter prompt** asks the AI to put a `[[Beat N]]` marker on its own line before each beat. **Paste chapter reply** splits the reply at those markers, even when they're decorated as `**[[Beat 2]]**` or `### [[Beat 2: Title]]`. It drops chatter like "Here you go!" and "Want me to continue?", shows a preview per beat, and saves each part as a new version. Existing prose is kept as an older version. If there are no markers, you can file the whole reply under one beat.
+
+Markers are never stored. If a model adds one to a single-beat reply, it's stripped on paste.
+
+**Read** shows the chapter as continuous prose, with **Copy chapter text**.
+
 ### Generating and editing with AI (Grok, Claude, ChatGPT…)
 
 Nothing has to be typed by hand. Every entity can be generated or revised through an external AI, with no API key, by copying and pasting:

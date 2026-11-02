@@ -13,6 +13,7 @@ import { SortableItem, SortableList, useOptimisticOrder } from '@/components/ui/
 import { CharacterChips, CharacterPicker } from '@/features/characters/CharacterPicker'
 import { useComposer } from '@/features/export/composer-context'
 import { ReadingView } from './ReadingView'
+import { WriteView } from './WriteView'
 import { BeatCard } from './BeatCard'
 import { BEAT_STATUS, BEAT_STATUSES } from './status'
 import type { StoryOutletContext } from './StoryLayout'
@@ -225,7 +226,7 @@ function ChapterPanel({
   const pov = chapter.povCharacterId ? characters.get(chapter.povCharacterId) : undefined
   const words = beats.reduce((n, b) => n + (b.targetWords ?? 0), 0)
   const writtenWords = beats.reduce((n, b) => n + wordCount(prose.get(b.id)?.text ?? ''), 0)
-  const [mode, setMode] = useState<'plan' | 'read'>('plan')
+  const [mode, setMode] = useState<'plan' | 'write' | 'read'>('plan')
 
   useEffect(() => {
     if (initialBeat) setExpanded(initialBeat)
@@ -338,11 +339,12 @@ function ChapterPanel({
           value={mode}
           onChange={setMode}
           options={[
-            { value: 'plan', label: 'Beats' },
+            { value: 'plan', label: 'Plan' },
+            { value: 'write', label: 'Write' },
             { value: 'read', label: writtenWords ? `Read · ${writtenWords.toLocaleString()} words` : 'Read' },
           ]}
         />
-        {beats.length > 0 && (
+        {beats.length > 0 && mode === 'plan' && (
           <Button size="sm" variant="ghost" onClick={() => openAi({ kind: 'chapter', chapterId: chapter.id })}>
             <Wand2 /> Edit beats with AI
           </Button>
@@ -351,6 +353,16 @@ function ChapterPanel({
 
       {mode === 'read' ? (
         <ReadingView chapter={chapter} beats={beats} prose={prose} />
+      ) : mode === 'write' ? (
+        <WriteView
+          chapter={chapter}
+          beats={beats}
+          prose={prose}
+          onEditBeat={(id) => {
+            setMode('plan')
+            setExpanded(id)
+          }}
+        />
       ) : (
       <div>
         {beats.length === 0 ? (
