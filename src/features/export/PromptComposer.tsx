@@ -136,6 +136,7 @@ export function PromptComposer({ storyId, scope, onClose }: { storyId: string; s
       <Group label="Include">
         <div className="space-y-0.5">
           <Switch checked={options.includeTask} onChange={(v) => set('includeTask', v)} label="Writing instructions" hint="POV, tense, length, where to stop" />
+          <Switch checked={options.includeCraft !== false} onChange={(v) => set('includeCraft', v)} label="Craft rules" hint="No repetition, show don’t label, varied rhythm, inner life" />
           <Switch checked={options.includeStory} onChange={(v) => set('includeStory', v)} label="Story bible" hint="Premise, heat, style guide, rules" />
           <Switch checked={options.includeRelationships} onChange={(v) => set('includeRelationships', v)} label="Relationship dynamics" hint="Only between characters on the page" />
           <Switch checked={options.includeContinuity} onChange={(v) => set('includeContinuity', v)} label="Story so far" hint="Chapter summaries and beat recaps" />

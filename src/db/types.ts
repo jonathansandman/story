@@ -235,6 +235,8 @@ export interface ExportOptions {
   includeRelationships: boolean
   /** The tail of the previous beat's prose, so the next passage continues seamlessly. */
   includePreviousPassage: boolean
+  /** Craft rules (no repetition, show-don't-label, rhythm, interiority…). Default on. */
+  includeCraft?: boolean
   includeWriterNotes: boolean
   /** Free text appended to the task section. */
   extraInstructions: string

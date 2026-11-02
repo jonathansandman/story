@@ -139,7 +139,7 @@ const FORMAT = `{
     "title": "", "logline": "", "premise": "", "genre": "",
     "heat": "",         // how explicit, e.g. "Slow burn → explicit"
     "pov": "", "tense": "past" | "present",
-    "style": "",        // prose style guide for the writing AI
+    "style": "",        // prose style guide: voice, sentence-rhythm RANGE, imagery, what to avoid — never a single register
     "contentRules": "", // story-wide always / never
     "world": "", "themes": [], "tags": []
   },
@@ -183,7 +183,9 @@ function replyRules(mode: 'create' | 'edit'): string {
     'It must be valid JSON: double quotes, no trailing commas, no comments. Use \\n for line breaks inside strings.',
     'Refer to characters by their exact name everywhere (pov, characters, between).',
     'Write field values as planning notes for a novelist — specific, concrete, vivid. Not prose, not generic.',
-    'A beat is one movement of a scene (a glance, a decision, a confession), not a whole scene. "emotion" says what each person feels going in and coming out.',
+    'A beat is one movement of a scene (a glance, a decision, a confession), not a whole scene — and every beat needs a TURN: something is different at the end of it (a decision, a reveal, a shift in power or feeling). Never split one moment into several near-identical beats that only escalate the same thing; merge them.',
+    'Vary the beats in a chapter: action, dialogue, interior moments, a change of place or pace, a complication or reversal. "emotion" says what each person feels going in and coming out, and it should change across the chapter.',
+    'Descriptions are plans, not prose: say what happens and what it means, not how to phrase it. Avoid labels the writer would echo (“she is honest”, “stays casual”) — describe the behaviour instead.',
     'Use "optional": true for beats that are good suggestions but not essential, and give every new beat a short "why".',
   ]
   const edit = [
@@ -214,7 +216,9 @@ const OPTIONS_FORMAT = `{
   "themes": [ { "title": "", "description": "" } ],          // 8
   "styles": [       // 4 clearly different prose styles
     { "title": "", "description": "a usable style guide", "pov": "", "tense": "past" | "present",
-      "sample": "a 3–5 sentence paragraph from THIS story, written in this style" }
+      "sample": "a 3–5 sentence paragraph from THIS story, written in this style",
+      // descriptions are usable style guides: voice, rhythm range (long and short sentences), imagery, interiority, what to avoid
+    }
   ],
   "elements": [ { "title": "", "description": "" } ],        // 10–12: set pieces, tropes, dynamics, motifs, key moments
   "characters": [   // 4–6 concepts (skip any I already gave you)

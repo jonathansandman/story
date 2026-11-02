@@ -9,6 +9,7 @@ import { relativeTime, wordCount } from '@/lib/text'
 import { Button, Field, TextArea } from '@/components/ui/primitives'
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, useConfirm, useToast } from '@/components/ui/overlays'
 import { PASSAGE_TAIL_WORDS } from '@/export/build'
+import { PolishBox, RepeatsNote } from './PolishTools'
 
 /**
  * Where prose comes back in. The loop is: copy beat prompt → write elsewhere →
@@ -138,6 +139,21 @@ export function ProsePanel({ beat }: { beat: Beat }) {
         aria-label="Prose"
       />
       <p className="text-[12px] text-faint">Edits save to this version. The next beat's prompt quotes the last ~{PASSAGE_TAIL_WORDS} words so it continues seamlessly.</p>
+      <RepeatsNote text={active.text} />
+      <PolishBox
+        storyId={beat.storyId}
+        beatIds={[beat.id]}
+        label="beat"
+        onPaste={async () => {
+          const text = await readClipboard()
+          if (!text?.trim()) {
+            toast('Couldn’t read the clipboard', 'paste into the box and save as a new version')
+            return
+          }
+          await addDraft(beat.id, text, 'ai-rewrite', 'Polish pass')
+          toast('Polished version saved', `${wordCount(text).toLocaleString()} words · the previous version is kept`)
+        }}
+      />
 
       <div className="rounded-xl bg-ok/8 p-4 ring-1 ring-ok/20">
         <Field label="Recap — what actually happened" hint="1–3 sentences. Used as “story so far” in later prompts, instead of your plan.">

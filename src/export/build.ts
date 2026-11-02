@@ -1,6 +1,7 @@
 import type { Beat, Chapter, Character, DetailLevel, ExportOptions, Relationship, Story } from '@/db/types'
 import { compact, fields, list, section, text, type PromptDocument, type PromptNode, type PromptSection } from './document'
 import { storyOrder, type ExportScope, type LocatedBeat, type StoryBundle } from './bundle'
+import { CRAFT_REMINDER, craftSection } from './craft'
 
 /**
  * The prompt builder.
@@ -53,6 +54,7 @@ export function buildPrompt({ bundle, scope, options, overrides = {} }: BuildInp
 
   const sections = compact<PromptSection>([
     options.includeTask && taskSection(story, scope, targets, bundle, options),
+    options.includeCraft !== false && craftSection(),
     options.includeStory && storySection(story, options.characterDetail),
     charactersSection(bundle, characterIds, options, overrides, primaryPov(bundle, targets)),
     options.includeRelationships && relationshipsSection(bundle.relationships, characterIds, bundle.characters),
@@ -174,7 +176,7 @@ function taskSection(
     povName || story.pov ? `Point of view: ${[povName && `${povName}`, story.pov].filter(Boolean).join(' — ')}.` : null,
     story.tense ? `Tense: ${story.tense}.` : null,
     words > 0 ? `Length: roughly ${words.toLocaleString('en-US')} words.` : null,
-    'Stay in character: honour each character\'s voice, desires and boundaries as written.',
+    'Stay in character: honour each character’s voice, desires and boundaries — dramatise the notes, never quote them.',
     options.includeNextBeat ? 'Do not write past the point marked "Stop before".' : null,
     markers
       ? `Put a marker on its own line before each beat: ${targets
@@ -368,7 +370,7 @@ function previousPassageSection(bundle: StoryBundle, all: LocatedBeat[], first: 
   const crossesChapter = prev.chapter.id !== first.chapter.id
   return section('previous_passage', 'Pick up from here — the end of the previous passage', [
     text(
-      `${crossesChapter ? `This is the end of ${chapterLabel(prev.chapter, prev.chapterIndex)}. Begin the new chapter` : 'Continue directly from this'} — match its voice and rhythm, and do not repeat or summarise it.`,
+      `${crossesChapter ? `This is the end of ${chapterLabel(prev.chapter, prev.chapterIndex)}. Begin the new chapter` : 'Continue directly from this'} — match its voice, but don’t repeat or summarise it, and don’t reuse its images or phrases.`,
     ),
     text(`${truncated ? '…' : ''}${tail}`),
   ])
@@ -545,6 +547,7 @@ export function buildFollowUp(bundle: StoryBundle, beatId: string, options: Expo
       words ? `Length: roughly ${words.toLocaleString('en-US')} words.` : null,
       options.includeNextBeat ? 'Stop at the point marked "Stop before".' : null,
       'Output prose only — no headings, summaries or commentary.',
+      ...(options.includeCraft !== false ? CRAFT_REMINDER : []),
     ]),
     text(options.extraInstructions),
   ])

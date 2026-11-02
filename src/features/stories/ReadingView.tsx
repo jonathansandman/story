@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { Copy } from 'lucide-react'
+import { ChapterPasteDialog } from './ChapterPasteDialog'
+import { PolishBox, RepeatsNote } from './PolishTools'
 import type { Beat, Chapter, Draft } from '@/db/types'
 import { copyText } from '@/lib/clipboard'
 import { wordCount } from '@/lib/text'
@@ -14,6 +17,7 @@ export function ReadingView({ chapter, beats, prose }: { chapter: Chapter; beats
   const toast = useToast()
   const written = beats.filter((b) => prose.has(b.id))
   const fullText = written.map((b) => prose.get(b.id)!.text.trim()).join('\n\n')
+  const [pastePolish, setPastePolish] = useState(false)
 
   return (
     <div>
@@ -32,6 +36,14 @@ export function ReadingView({ chapter, beats, prose }: { chapter: Chapter; beats
           <Copy /> Copy chapter text
         </Button>
       </div>
+
+      {fullText && (
+        <div className="mb-8 space-y-3">
+          <RepeatsNote text={fullText} min={4} />
+          <PolishBox storyId={chapter.storyId} beatIds={written.map((b) => b.id)} label="chapter" onPaste={() => setPastePolish(true)} />
+        </div>
+      )}
+      {pastePolish && <ChapterPasteDialog beats={beats} prose={prose} polish onClose={() => setPastePolish(false)} />}
 
       <article className="mx-auto max-w-[38rem] font-serif text-[18px] leading-[1.8] text-ink">
         {beats.map((b, i) => {

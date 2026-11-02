@@ -127,6 +127,34 @@ You review every change in place ("New · after 'The causeway' · *Your idea: je
 
 On any chapter, **Brainstorm** asks for 8–12 candidate beats, from the obvious to the surprising, each with a reason and a suggested position. Grok's 3–5 strongest arrive ticked and the rest as unticked **ideas**, so picking is just tapping. Each new beat goes exactly where it was suggested.
 
+### Writing quality: craft rules, repetition check, polish pass
+
+Models given a dense planning brief tend to fail in predictable ways:
+- they echo the brief's labels as prose ("she stayed casual");
+- they repeat the same images every paragraph;
+- they write in one monotone rhythm;
+- they narrate like a camera, with no inner life;
+- they pad a small beat to reach a word count.
+
+Trellis counters this in three places.
+
+1. **Craft rules in every writing prompt** (Compose → *Craft rules*, on by default). They come straight after the task:
+   - the notes are private, so dramatise them and never quote or name them;
+   - no reused images or phrases, including from the previous passage;
+   - every paragraph moves something, so write less rather than circle;
+   - vary sentence length;
+   - give the POV character thoughts, memories and contradictions;
+   - prefer specific sensory detail to intensity;
+   - dialogue carries subtext;
+   - end on a forward-leaning moment.
+
+   Same-chat follow-ups carry a one-line reminder.
+2. **Better plans, which make better prose.** Planning prompts now require every beat to have a *turn* (something is different by the end), forbid splitting one moment into near-identical escalating beats, ask for a mix of beat types, and ask for plans that describe behaviour rather than labels. Style guides must describe a *range* of rhythm rather than one register.
+3. **Repetition check and polish pass.**
+   - Each beat's Prose tab, and the chapter's Read view, flag phrases the draft leans on, e.g. "the rain was loud on the roof" ×3. This is detected locally and merged into the longest repeated phrase.
+   - **Polish with AI** builds a revision prompt containing the draft, the beat plan, style guide, voices, the *exact* repeats to vary, and your optional notes. It asks Grok to improve the writing without changing what happens or the length (±15%).
+   - Paste the result back with **Paste polished beat** or **Paste polished chapter** (whole chapters are split at `[[Beat N]]` markers). It's saved as a new **AI rewrite** version, and the original is kept.
+
 ### Generating and editing with AI (Grok, Claude, ChatGPT…)
 
 Nothing has to be typed by hand. Every entity can be generated or revised through an external AI, with no API key, by copying and pasting:

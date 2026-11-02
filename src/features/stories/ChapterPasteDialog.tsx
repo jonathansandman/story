@@ -13,7 +13,18 @@ import { Dialog, useToast } from '@/components/ui/overlays'
  * put [[Beat N]] markers before each beat; we split on them and save each
  * part as a new prose version on the matching beat.
  */
-export function ChapterPasteDialog({ beats, prose, onClose }: { beats: Beat[]; prose: Map<string, Draft>; onClose: () => void }) {
+export function ChapterPasteDialog({
+  beats,
+  prose,
+  onClose,
+  polish,
+}: {
+  beats: Beat[]
+  prose: Map<string, Draft>
+  onClose: () => void
+  /** Pasting a polish pass rather than a first draft. */
+  polish?: boolean
+}) {
   const toast = useToast()
   const [reply, setReply] = useState('')
   const firstUnwritten = beats.find((b) => !prose.has(b.id))?.id ?? beats[0]?.id ?? ''
@@ -36,7 +47,7 @@ export function ChapterPasteDialog({ beats, prose, onClose }: { beats: Beat[]; p
   }
 
   const save = async () => {
-    for (const a of assignments) await addDraft(a.beat.id, a.text, 'pasted', 'Whole-chapter paste')
+    for (const a of assignments) await addDraft(a.beat.id, a.text, polish ? 'ai-rewrite' : 'pasted', polish ? 'Polish pass' : 'Whole-chapter paste')
     const words = assignments.reduce((n, a) => n + wordCount(a.text), 0)
     toast(`Saved ${assignments.length} beat${assignments.length === 1 ? '' : 's'}`, `${words.toLocaleString()} words`)
     onClose()
@@ -46,8 +57,12 @@ export function ChapterPasteDialog({ beats, prose, onClose }: { beats: Beat[]; p
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Paste a whole chapter"
-      description="Paste the AI’s reply to the chapter prompt. It’s split at the [[Beat N]] markers and filed under each beat."
+      title={polish ? 'Paste the polished chapter' : 'Paste a whole chapter'}
+      description={
+        polish
+          ? 'Paste the revised chapter. It’s split at the [[Beat N]] markers and saved as a new version of each beat — the originals are kept.'
+          : 'Paste the AI’s reply to the chapter prompt. It’s split at the [[Beat N]] markers and filed under each beat.'
+      }
       className="max-w-2xl max-md:top-0 max-md:left-0 max-md:h-dvh max-md:max-h-none max-md:w-full max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0"
     >
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">

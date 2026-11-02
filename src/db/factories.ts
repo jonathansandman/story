@@ -150,6 +150,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   includeNextBeat: true,
   includeRelationships: true,
   includePreviousPassage: true,
+  includeCraft: true,
   includeWriterNotes: false,
   extraInstructions: '',
 }
