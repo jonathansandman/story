@@ -59,7 +59,9 @@ export async function applyPlan(plan: Plan, selected: Set<string>, opts: { snaps
             ch.characterIds = ch.characterIds.filter(ok)
             if (!ok(ch.povCharacterId)) ch.povCharacterId = null
             await database.chapters.put(ch)
+            const beatOn = (key: string) => selected.has(key)
             for (const bc of c.beats ?? []) {
+              if (!beatOn(bc.key)) continue
               if (bc.op === 'delete') {
                 await database.drafts.where('beatId').equals(bc.row.id).delete()
                 await database.beats.delete(bc.row.id)
@@ -68,12 +70,27 @@ export async function applyPlan(plan: Plan, selected: Set<string>, opts: { snaps
                 await database.beats.put(b)
               }
             }
-            // Apply the final ordering to every beat in the chapter.
-            const order = c.beatOrder ?? []
+            // Final order: drop new beats that were unticked; put back deletions that were unticked.
+            const skippedNew = new Set((c.beats ?? []).filter((b) => b.op === 'create' && !beatOn(b.key)).map((b) => b.row.id))
+            const order = (c.beatOrder ?? []).filter((id) => !skippedNew.has(id))
+            const keptDeletes = (c.beats ?? []).filter((b) => b.op === 'delete' && !beatOn(b.key)).sort((a, b) => a.row.order - b.row.order)
+            if (keptDeletes.length) {
+              const original = (await database.beats.where('chapterId').equals(ch.id).toArray()).sort((a, b) => a.order - b.order).map((b) => b.id)
+              for (const d of keptDeletes) {
+                const before = original.slice(0, original.indexOf(d.row.id)).reverse().find((id) => order.includes(id))
+                order.splice(before ? order.indexOf(before) + 1 : 0, 0, d.row.id)
+              }
+            }
             await Promise.all(order.map((id, i) => database.beats.update(id, { order: i })))
             break
           }
         }
+      }
+
+      // Chapter order (when new chapters were placed between existing ones).
+      if (plan.chapterOrder) {
+        const skipped = new Set(plan.changes.filter((c) => c.group === 'chapter' && c.op === 'create' && !chosen.includes(c)).map((c) => c.row.id))
+        await Promise.all(plan.chapterOrder.filter((id) => !skipped.has(id)).map((id, i) => database.chapters.update(id, { order: i })))
       }
     },
   )

@@ -5,7 +5,7 @@ import { importBackup } from '@/db/repo'
 import { buildSeed } from '@/db/seed'
 import { applyPlan, loadState } from './apply'
 import { extractJson, parseReply } from './patch'
-import { planPatch, type DataState } from './plan'
+import { defaultSelection, planPatch, type DataState } from './plan'
 import { buildAiRequest } from './requests'
 
 const seedState = (): DataState => {
@@ -77,11 +77,45 @@ describe('planPatch', () => {
     expect(ch.beatOrder?.[0]).toBe('b_ch_1_2')
   })
 
-  it('merge mode keeps order and appends new beats', () => {
+  it('merge mode places a new beat after the beat listed before it', () => {
     const { patch } = parseReply(JSON.stringify({ chapters: [{ id: 'ch_2', beats: [{ id: 'b_ch_2_1', tone: 'Bleak' }, { title: 'Coda', description: 'y' }] }] }))
     const plan = planPatch(patch!, seedState(), { targetStoryId: 's_long_weekend' })
     const ch = plan.changes.find((c) => c.group === 'chapter')!
-    expect(ch.beatOrder).toEqual(['b_ch_2_0', 'b_ch_2_1', 'b_ch_2_2', ch.beats![1]!.row.id])
+    expect(ch.beatOrder).toEqual(['b_ch_2_0', 'b_ch_2_1', ch.beats![1]!.row.id, 'b_ch_2_2'])
+    expect(ch.beats![1]!.position).toBe('After “Stranded”')
+  })
+
+  it('places new beats by "after" (id, title or start), keeping list order for the same anchor', () => {
+    const { patch } = parseReply(
+      JSON.stringify({
+        chapters: [
+          {
+            id: 'ch_2',
+            beats: [
+              { title: 'A', description: 'a', after: 'Stranded' },
+              { title: 'B', description: 'b', after: 'Stranded', optional: true, why: 'Adds texture' },
+              { title: 'Opening', description: 'o', after: 'start' },
+              { title: 'Lost', description: 'l', after: 'Nonexistent' },
+            ],
+          },
+        ],
+      }),
+    )
+    const plan = planPatch(patch!, seedState(), { targetStoryId: 's_long_weekend' })
+    const ch = plan.changes.find((c) => c.group === 'chapter')!
+    const title = (id: string) => ch.beats!.find((b) => b.row.id === id)?.title ?? id
+    expect(ch.beatOrder!.map(title)).toEqual(['Opening', 'Lost', 'b_ch_2_0', 'b_ch_2_1', 'A', 'B', 'b_ch_2_2'])
+    const b = ch.beats!.find((x) => x.title === 'B')!
+    expect(b).toMatchObject({ defaultOn: false, why: 'Adds texture' })
+    expect(defaultSelection(plan).has(b.key)).toBe(false)
+    expect(plan.warnings.some((w) => w.includes('Nonexistent'))).toBe(true)
+  })
+
+  it('inserts new chapters after a named chapter and renumbers', () => {
+    const { patch } = parseReply(JSON.stringify({ chapters: [{ title: 'Interlude', purpose: 'Breathe', after: 'Arrival' }] }))
+    const plan = planPatch(patch!, seedState(), { targetStoryId: 's_long_weekend' })
+    expect(plan.chapterOrder).toEqual(['ch_1', plan.changes.find((c) => c.group === 'chapter')!.row.id, 'ch_2', 'ch_3'])
+    expect(plan.changes.find((c) => c.group === 'chapter')!.title).toBe('2. Interlude')
   })
 
   it('matches by nickname without renaming', () => {
@@ -89,6 +123,12 @@ describe('planPatch', () => {
     const plan = planPatch(patch!, seedState())
     expect(plan.changes[0]).toMatchObject({ op: 'update', title: 'Juniper Hale' })
     expect(plan.changes[0]!.fields.map((f) => f.label)).toEqual(['Voice'])
+  })
+
+  it('does not report an unchanged POV as cleared', () => {
+    const { patch } = parseReply(JSON.stringify({ chapters: [{ id: 'ch_2', beats: [{ title: 'Extra', description: 'x' }] }] }))
+    const plan = planPatch(patch!, seedState(), { targetStoryId: 's_long_weekend' })
+    expect(plan.changes.find((c) => c.group === 'chapter')!.fields).toEqual([])
   })
 
   it('warns about unknown character names', () => {
@@ -110,7 +150,8 @@ describe('applyPlan', () => {
     )
     const plan = planPatch(patch!, await loadState(database), { targetStoryId: 's_long_weekend' })
     const rook = plan.changes.find((c) => c.group === 'character')!
-    const selected = new Set(plan.changes.map((c) => c.key).filter((k) => k !== rook.key))
+    const selected = defaultSelection(plan)
+    selected.delete(rook.key)
     await applyPlan(plan, selected, { snapshot: false, database })
     expect(await database.characters.where('name').equals('Rook').count()).toBe(0)
     const ch3 = await database.chapters.get('ch_3')
@@ -130,5 +171,21 @@ describe('buildAiRequest', () => {
     expect(prompt).toContain('"id": "b_ch_2_1"')
     expect(prompt).toContain('Add a beat where June calls.')
     expect(prompt).toContain('## Reply format')
+  })
+})
+
+describe('applyPlan — per-beat selection', () => {
+  it('skips unticked new beats and keeps unticked deletions in place', async () => {
+    const database = new TrellisDB(`test-${Math.random()}`)
+    await importBackup(buildSeed(), database)
+    const { patch } = parseReply(JSON.stringify({ chapters: [{ id: 'ch_2', beatsMode: 'replace', beats: [{ id: 'b_ch_2_0' }, { title: 'New', description: 'n' }, { id: 'b_ch_2_2' }] }] }))
+    const plan = planPatch(patch!, await loadState(database), { targetStoryId: 's_long_weekend' })
+    const ch = plan.changes.find((c) => c.group === 'chapter')!
+    const selected = defaultSelection(plan)
+    selected.delete(ch.beats!.find((b) => b.op === 'create')!.key) // don't add "New"
+    selected.delete(ch.beats!.find((b) => b.op === 'delete')!.key) // keep "Stranded"
+    await applyPlan(plan, selected, { snapshot: false, database })
+    const beats = await database.beats.where('chapterId').equals('ch_2').sortBy('order')
+    expect(beats.map((b) => b.title)).toEqual(['The causeway', 'Stranded', 'June\'s lights'])
   })
 })

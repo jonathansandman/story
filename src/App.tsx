@@ -11,6 +11,7 @@ import { OutlineView } from '@/features/stories/OutlineView'
 import { StoriesHome } from '@/features/stories/StoriesHome'
 import { StoryBible } from '@/features/stories/StoryBible'
 import { StoryLayout } from '@/features/stories/StoryLayout'
+import { StoryBuilder } from '@/features/builder/StoryBuilder'
 
 function Root() {
   return (
@@ -40,6 +41,7 @@ const routes = [
           { path: 'cast', element: <CastView /> },
         ],
       },
+      { path: 'new', element: <StoryBuilder /> },
       { path: 'settings', element: <Settings /> },
       { path: '*', element: <StoriesHome /> },
     ],

@@ -67,7 +67,7 @@ export function StoryLayout() {
               options={Object.entries(STORY_STATUS).map(([value, label]) => ({ value: value as StoryStatus, label }))}
               className="h-8 w-34 text-[13px] max-sm:hidden"
             />
-            <Button size="sm" onClick={() => openAi({ kind: 'story', storyId: story.id })}>
+            <Button size="sm" aria-label="Edit story with AI" title="Edit story with AI" onClick={() => openAi({ kind: 'story', storyId: story.id })}>
               <Wand2 /> <span className="max-sm:hidden">Edit with AI</span>
             </Button>
             <Menu>

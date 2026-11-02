@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { Check } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { initials } from '@/lib/text'
 
@@ -392,5 +393,14 @@ export function Select<T extends string>({
         </option>
       ))}
     </select>
+  )
+}
+
+/** Checkbox visual used in pick lists. */
+export function Tick({ on }: { on: boolean }) {
+  return (
+    <span className={cn('mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors', on ? 'border-accent bg-accent text-accent-ink' : 'border-line-strong bg-surface')}>
+      {on && <Check size={12} strokeWidth={3} />}
+    </span>
   )
 }

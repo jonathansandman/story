@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext, useSearchParams } from 'react-router'
-import { ChevronDown, Copy, GripVertical, MoreHorizontal, Plus, Sparkles, Trash2, Wand2, X } from 'lucide-react'
+import { ChevronDown, Copy, GripVertical, Lightbulb, MoreHorizontal, Plus, Sparkles, Trash2, Wand2, X } from 'lucide-react'
 import { useAi } from '@/features/ai/ai-context'
 import { useChapters, useCharacters, useStoryBeats, useStoryProse } from '@/db/hooks'
 import { createBeat, createChapter, deleteChapter, reorder, updateChapter } from '@/db/repo'
@@ -14,6 +14,7 @@ import { CharacterChips, CharacterPicker } from '@/features/characters/Character
 import { useComposer } from '@/features/export/composer-context'
 import { ReadingView } from './ReadingView'
 import { WriteView } from './WriteView'
+import { IdeasBar } from './IdeasBar'
 import { BeatCard } from './BeatCard'
 import { BEAT_STATUS, BEAT_STATUSES } from './status'
 import type { StoryOutletContext } from './StoryLayout'
@@ -48,6 +49,10 @@ export function OutlineView() {
   const orderedSelection = chapters.flatMap((c) => (beats.get(c.id) ?? []).filter((b) => selected.includes(b.id)).map((b) => b.id))
 
   return (
+    <>
+    <div className="mx-auto w-full max-w-[1400px] px-4 pt-6 sm:px-8 lg:pt-8">
+      <IdeasBar story={story} />
+    </div>
     <div className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-6 px-4 py-6 sm:px-8 lg:flex-row lg:gap-10 lg:py-8">
       <ChapterRail chapters={chapters} beats={beats} activeId={chapter?.id} onSelect={selectChapter} storyId={story.id} />
 
@@ -96,6 +101,7 @@ export function OutlineView() {
         </div>
       )}
     </div>
+    </>
   )
 }
 
@@ -260,7 +266,10 @@ function ChapterPanel({
               </Button>
             </MenuTrigger>
             <MenuContent>
-              <MenuItem icon={<Wand2 />} onSelect={() => openAi({ kind: 'chapter', chapterId: chapter.id, instruction: beats.length ? '' : 'Plan 4–6 beats for this chapter.' })}>
+              <MenuItem icon={<Lightbulb />} onSelect={() => openAi({ kind: 'brainstorm', chapterId: chapter.id })}>
+                Brainstorm beats…
+              </MenuItem>
+              <MenuItem icon={<Wand2 />} onSelect={() => openAi({ kind: 'chapter', chapterId: chapter.id })}>
                 Edit chapter with AI…
               </MenuItem>
               <MenuItem
@@ -344,10 +353,15 @@ function ChapterPanel({
             { value: 'read', label: writtenWords ? `Read · ${writtenWords.toLocaleString()} words` : 'Read' },
           ]}
         />
-        {beats.length > 0 && mode === 'plan' && (
-          <Button size="sm" variant="ghost" onClick={() => openAi({ kind: 'chapter', chapterId: chapter.id })}>
-            <Wand2 /> Edit beats with AI
-          </Button>
+        {mode === 'plan' && beats.length > 0 && (
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" aria-label="Brainstorm" title="Brainstorm beats" onClick={() => openAi({ kind: 'brainstorm', chapterId: chapter.id })}>
+              <Lightbulb /> <span className="max-sm:hidden">Brainstorm</span>
+            </Button>
+            <Button size="sm" variant="ghost" aria-label="Edit beats with AI" title="Edit beats with AI" onClick={() => openAi({ kind: 'chapter', chapterId: chapter.id })}>
+              <Wand2 /> <span className="max-sm:hidden">Edit with AI</span>
+            </Button>
+          </div>
         )}
       </div>
 
@@ -372,8 +386,8 @@ function ChapterPanel({
               A beat is one movement of a scene — a glance, a decision, a confession. Plan three or four before you write a word.
             </p>
             <div className="mt-5 flex flex-wrap justify-center gap-2">
-              <Button variant="primary" onClick={() => openAi({ kind: 'chapter', chapterId: chapter.id, instruction: 'Plan 4–6 beats for this chapter.' })}>
-                <Wand2 /> Plan beats with AI
+              <Button variant="primary" onClick={() => openAi({ kind: 'brainstorm', chapterId: chapter.id })}>
+                <Lightbulb /> Brainstorm beats
               </Button>
               <Button onClick={addBeat}>
                 <Plus /> First beat

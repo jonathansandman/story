@@ -29,11 +29,19 @@ export interface FieldChange {
 export type ChangeOp = 'create' | 'update' | 'delete'
 
 export interface BeatChange {
+  /** Selection key, so individual beats can be opted in/out. */
+  key: string
   op: ChangeOp
   title: string
   fields: FieldChange[]
   row: Beat
   hasProse?: boolean
+  /** Ticked by default? False for beats the AI marked optional. */
+  defaultOn: boolean
+  /** The AI's one-line reason. */
+  why?: string
+  /** Where a new beat lands, e.g. "After “The causeway”". */
+  position?: string
 }
 
 export interface PlannedChange {
@@ -50,12 +58,17 @@ export interface PlannedChange {
   beats?: BeatChange[]
   /** For chapters: the full final beat order (ids), written on apply. */
   beatOrder?: string[]
+  defaultOn: boolean
+  why?: string
+  position?: string
 }
 
 export interface Plan {
   targetStoryId: string | null
   storyIsNew: boolean
   changes: PlannedChange[]
+  /** Final chapter order for the target story (ids), when chapters were added or moved. */
+  chapterOrder?: string[]
   warnings: string[]
   notes?: string
 }
@@ -63,6 +76,16 @@ export interface Plan {
 export interface PlanOptions {
   /** The story the request was about, if any (refining a story/chapter/beat). */
   targetStoryId?: string | null
+}
+
+/** Everything ticked by default: all changes except ones the AI marked optional. */
+export function defaultSelection(plan: Plan): Set<string> {
+  const keys = new Set<string>()
+  for (const c of plan.changes) {
+    if (c.defaultOn || c.required) keys.add(c.key)
+    for (const b of c.beats ?? []) if (b.defaultOn) keys.add(b.key)
+  }
+  return keys
 }
 
 /* ───────────────────────────── helpers ───────────────────────────── */
@@ -82,7 +105,7 @@ function diff<T extends object>(before: T | null, after: T, labels: Partial<Reco
   for (const [key, label] of Object.entries(labels) as [keyof T, string][]) {
     const a = show(after[key])
     const b = before ? show(before[key]) : ''
-    if (a !== b && (before || a)) out.push({ label, before: clip(b), after: clip(a) })
+    if (a !== b && (before || a)) out.push({ label, before: b, after: a })
   }
   return out
 }
@@ -110,6 +133,7 @@ const STORY_LABELS: Partial<Record<keyof Story, string>> = {
   style: 'Style guide',
   contentRules: 'Content rules',
   world: 'World',
+  themes: 'Themes',
   tags: 'Tags',
 }
 const CHARACTER_LABELS: Partial<Record<keyof Character, string>> = {
@@ -217,6 +241,7 @@ export function planPatch(patch: TrellisPatch, state: DataState, options: PlanOp
         subtitle: existing ? undefined : row.tagline,
         fields: fieldChanges,
         row,
+        defaultOn: true,
       })
   }
 
@@ -247,7 +272,7 @@ export function planPatch(patch: TrellisPatch, state: DataState, options: PlanOp
     const fieldChanges = diff(existing ?? null, row, REL_LABELS)
     if (existing && !fieldChanges.length) continue
     const names = [a, b].map((id) => resolved.get(id)?.name ?? '?')
-    changes.push({ key: `rel:${row.id}`, group: 'relationship', op: existing ? 'update' : 'create', title: `${names[0]} & ${names[1]}`, subtitle: row.label, fields: fieldChanges, row })
+    changes.push({ key: `rel:${row.id}`, group: 'relationship', op: existing ? 'update' : 'create', title: `${names[0]} & ${names[1]}`, subtitle: row.label, fields: fieldChanges, row, defaultOn: true })
   }
 
   /* ── Chapters & beats ── */
@@ -256,6 +281,11 @@ export function planPatch(patch: TrellisPatch, state: DataState, options: PlanOp
   let nextOrder = (storyChapters.at(-1)?.order ?? -1) + 1
   const usedChapters = new Set<string>()
   const referenced = new Set<string>()
+  // Final chapter order: existing order, with new chapters inserted where the AI placed them.
+  const chapterOrder: string[] = storyChapters.map((c) => c.id)
+  const chapterTitles = new Map(storyChapters.map((c) => [c.id, c.title]))
+  let lastNewChapter: string | null = null
+  let chaptersMoved = false
 
   if (target)
     for (const pch of patch.chapters) {
@@ -265,8 +295,16 @@ export function planPatch(patch: TrellisPatch, state: DataState, options: PlanOp
         undefined
       if (existing) usedChapters.add(existing.id)
       const row = existing ? structuredClone(existing) : makeChapter(target.id, nextOrder++, {})
-      const { id: _id, pov, characters, beats, beatsMode, ...fields } = pch
+      const { id: _id, pov, characters, beats, beatsMode, after, optional, why, ...fields } = pch
       assignDefined(row, fields)
+      chapterTitles.set(row.id, row.title)
+      if (!existing) {
+        chaptersMoved = true
+        const anchor = after ? resolveChapterAnchor(after, storyChapters, chapterTitles) : lastNewChapter ? lastNewChapter : 'end'
+        if (after && anchor === undefined) warnings.push(`Couldn’t find chapter “${after}” to place “${row.title || 'a new chapter'}” after; added it at the end.`)
+        insertAfter(chapterOrder, row.id, anchor ?? 'end')
+        lastNewChapter = row.id
+      } else lastNewChapter = existing.id
       const label = pch.title || row.title || `Chapter ${row.order + 1}`
       if (pov !== undefined) row.povCharacterId = refChar(pov, label)
       const chars = refChars(characters, label)
@@ -274,14 +312,14 @@ export function planPatch(patch: TrellisPatch, state: DataState, options: PlanOp
       ;[row.povCharacterId, ...row.characterIds].forEach((id) => id && referenced.add(id))
 
       const fieldChanges = diff(existing ?? null, row, CHAPTER_LABELS)
-      const povBefore = existing?.povCharacterId ? (resolved.get(existing.povCharacterId)?.name ?? nameOf(state, existing.povCharacterId)) : ''
-      const povAfter = row.povCharacterId ? (resolved.get(row.povCharacterId)?.name ?? '') : ''
+      const povBefore = nameOf(state, existing?.povCharacterId ?? null, resolved)
+      const povAfter = nameOf(state, row.povCharacterId, resolved)
       if (povBefore !== povAfter) fieldChanges.push({ label: 'POV', before: povBefore, after: povAfter })
       const charsBefore = (existing?.characterIds ?? []).map((id) => nameOf(state, id, resolved)).join(', ')
       const charsAfter = row.characterIds.map((id) => nameOf(state, id, resolved)).join(', ')
       if (charsBefore !== charsAfter) fieldChanges.push({ label: 'Characters', before: charsBefore, after: charsAfter })
 
-      const { beatChanges, order } = planBeats(pch, beats, beatsMode, row, existing ? state.beats.filter((b) => b.chapterId === existing.id) : [], refChars, state, now)
+      const { beatChanges, order } = planBeats(pch, beats, beatsMode, row, existing ? state.beats.filter((b) => b.chapterId === existing.id) : [], refChars, state, now, warnings)
       for (const bc of beatChanges) bc.row.characterIds.forEach((id) => referenced.add(id))
       if (existing) row.updatedAt = now
 
@@ -296,8 +334,22 @@ export function planPatch(patch: TrellisPatch, state: DataState, options: PlanOp
           row,
           beats: beatChanges,
           beatOrder: order,
+          defaultOn: !optional,
+          ...(why ? { why } : {}),
         })
     }
+
+  // Number chapters by their final position and describe where new ones land.
+  if (chaptersMoved) {
+    for (const c of changes) {
+      if (c.group !== 'chapter') continue
+      const ch = c.row as Chapter
+      const idx = chapterOrder.indexOf(ch.id)
+      ch.order = idx
+      c.title = `${idx + 1}. ${ch.title || 'Untitled chapter'}`
+      if (c.op === 'create') c.position = idx === 0 ? 'At the start' : `After “${chapterTitles.get(chapterOrder[idx - 1]!) || `chapter ${idx}`}”`
+    }
+  }
 
   /* ── Cast: characters given a role, plus anyone referenced by chapters/beats ── */
   if (target && storyRow) {
@@ -329,16 +381,45 @@ export function planPatch(patch: TrellisPatch, state: DataState, options: PlanOp
         fields,
         row: storyRow,
         required: storyIsNew,
+        defaultOn: true,
       })
     }
   }
 
-  return { targetStoryId: target?.id ?? null, storyIsNew, changes, warnings: [...new Set(warnings)], ...(patch.notes ? { notes: patch.notes } : {}) }
+  return {
+    targetStoryId: target?.id ?? null,
+    storyIsNew,
+    changes,
+    ...(chaptersMoved ? { chapterOrder } : {}),
+    warnings: [...new Set(warnings)],
+    ...(patch.notes ? { notes: patch.notes } : {}),
+  }
 }
 
 function nameOf(state: DataState, id: string | null, resolved?: Map<string, Character>): string {
   if (!id) return ''
   return resolved?.get(id)?.name ?? state.characters.find((c) => c.id === id)?.name ?? '?'
+}
+
+/** Insert `id` into `list` after `anchor` ("start", "end", or an id in the list). */
+function insertAfter(list: string[], id: string, anchor: string) {
+  if (anchor === 'start') list.unshift(id)
+  else if (anchor === 'end') list.push(id)
+  else {
+    const i = list.indexOf(anchor)
+    if (i < 0) list.push(id)
+    else list.splice(i + 1, 0, id)
+  }
+}
+
+const isStart = (ref: string) => /^(start|beginning|first|top|0)$/i.test(ref.trim())
+
+function resolveChapterAnchor(ref: string, chapters: Chapter[], titles: Map<string, string>): string | undefined {
+  if (isStart(ref)) return 'start'
+  const hit = chapters.find((c) => c.id === ref) ?? [...titles].find(([, t]) => norm(t) === norm(ref))
+  if (hit) return Array.isArray(hit) ? hit[0] : hit.id
+  const n = /(\d+)/.exec(ref)?.[1] // "chapter 3"
+  return n ? chapters[Number(n) - 1]?.id : undefined
 }
 
 function planBeats(
@@ -350,13 +431,15 @@ function planBeats(
   refChars: (refs: string[] | undefined, context: string) => string[] | undefined,
   state: DataState,
   now: number,
+  warnings: string[],
 ): { beatChanges: BeatChange[]; order: string[] } {
   const existing = [...existingBeats].sort((a, b) => a.order - b.order)
   if (!patchBeats) return { beatChanges: [], order: existing.map((b) => b.id) }
 
   const used = new Set<string>()
   const changes: BeatChange[] = []
-  const listed: Beat[] = []
+  const listed: { row: Beat; isNew: boolean; after?: string }[] = []
+  const titles = new Map(existing.map((b) => [b.id, b.title || clip(b.description, 40)]))
 
   for (const pb of patchBeats) {
     const match =
@@ -365,31 +448,88 @@ function planBeats(
       undefined
     if (match) used.add(match.id)
     const row = match ? structuredClone(match) : makeBeat(chapter.storyId, chapter.id, 0, {})
-    const { id: _id, characters, ...fields } = pb
+    const { id: _id, characters, after, optional, why, ...fields } = pb
     assignDefined(row, fields)
     const chars = refChars(characters, `Beat “${pb.title || row.title || 'untitled'}” (${pch.title || chapter.title || 'chapter'})`)
     if (chars) row.characterIds = chars
     if (!match) row.status = row.description ? 'planned' : 'idea'
+    titles.set(row.id, row.title || clip(row.description, 40))
     const fields2 = diff(match ?? null, row, BEAT_LABELS)
     const cb = (match?.characterIds ?? []).map((id) => nameOf(state, id)).join(', ')
     const ca = row.characterIds.map((id) => nameOf(state, id)).join(', ')
     if (chars && cb !== ca) fields2.push({ label: 'On the page', before: cb, after: ca || '(chapter’s characters)' })
     if (match) row.updatedAt = now
-    listed.push(row)
-    if (!match || fields2.length) changes.push({ op: match ? 'update' : 'create', title: row.title || clip(row.description, 60) || 'Untitled beat', fields: fields2, row })
+    listed.push({ row, isNew: !match, after })
+    if (!match || fields2.length)
+      changes.push({
+        key: `beat:${row.id}`,
+        op: match ? 'update' : 'create',
+        title: row.title || clip(row.description, 60) || 'Untitled beat',
+        fields: fields2,
+        row,
+        defaultOn: !optional,
+        ...(why ? { why } : {}),
+      })
   }
 
   const unlisted = existing.filter((b) => !used.has(b.id))
-  let final: Beat[]
+  let order: string[]
   if (mode === 'replace') {
-    final = listed
+    order = listed.map((l) => l.row.id)
     for (const b of unlisted)
-      changes.push({ op: 'delete', title: b.title || clip(b.description, 60) || 'Untitled beat', fields: [], row: b, hasProse: state.beatsWithProse?.has(b.id) })
-  } else if (unlisted.length === 0) {
-    final = listed // every existing beat was mentioned: adopt the model's order
+      changes.push({
+        key: `beat:${b.id}`,
+        op: 'delete',
+        title: b.title || clip(b.description, 60) || 'Untitled beat',
+        fields: [],
+        row: b,
+        hasProse: state.beatsWithProse?.has(b.id),
+        defaultOn: true,
+      })
+  } else if (unlisted.length === 0 && listed.every((l) => !l.after)) {
+    order = listed.map((l) => l.row.id) // the model listed everything: adopt its order
   } else {
-    final = [...existing.map((b) => listed.find((l) => l.id === b.id) ?? b), ...listed.filter((l) => !existing.some((b) => b.id === l.id))]
+    // Keep existing order; place each new beat after its "after" anchor, or
+    // after whatever the model listed just before it, or at the end.
+    order = existing.map((b) => b.id)
+    const lastAfter = new Map<string, string>() // anchor → last beat inserted there (keeps list order)
+    let prev: string | null = null
+    for (const l of listed) {
+      if (!l.isNew) {
+        prev = l.row.id
+        continue
+      }
+      let anchor: string
+      if (l.after) {
+        if (isStart(l.after)) anchor = 'start'
+        else {
+          const hit =
+            existing.find((b) => b.id === l.after) ??
+            listed.find((x) => x.row.id === l.after) ??
+            [...titles].map(([id, t]) => ({ id, t })).find((x) => norm(x.t) === norm(l.after!))
+          const id = hit ? ('row' in hit ? hit.row.id : hit.id) : undefined
+          if (!id) warnings.push(`Couldn’t find beat “${l.after}” to place “${l.row.title || 'a new beat'}” after; added it ${prev ? 'after the previous one' : 'at the end'}.`)
+          anchor = id ?? prev ?? 'end'
+        }
+      } else anchor = prev ?? 'end'
+      const effective = lastAfter.get(anchor) ?? anchor
+      if (effective === 'start') order.unshift(l.row.id)
+      else insertAfter(order, l.row.id, effective)
+      lastAfter.set(anchor, l.row.id)
+      prev = l.row.id
+    }
   }
-  final.forEach((b, i) => (b.order = i))
-  return { beatChanges: changes, order: final.map((b) => b.id) }
+
+  // Final positions and human-readable placement for new beats.
+  const rows = new Map(listed.map((l) => [l.row.id, l.row]))
+  order.forEach((id, i) => {
+    const r = rows.get(id)
+    if (r) r.order = i
+  })
+  for (const c of changes)
+    if (c.op === 'create') {
+      const i = order.indexOf(c.row.id)
+      c.position = i === 0 ? 'At the start' : `After “${titles.get(order[i - 1]!) ?? 'previous beat'}”`
+    }
+  return { beatChanges: changes, order }
 }

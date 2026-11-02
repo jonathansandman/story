@@ -1,4 +1,6 @@
-import type { Beat, Chapter, Character, Relationship, Story } from '@/db/types'
+import type { Beat, Chapter, Character, Idea, Relationship, Story } from '@/db/types'
+import type { Direction, StyleChoice } from './options'
+import type { PatchCharacter } from './patch'
 import type { DataState } from './plan'
 
 /**
@@ -10,8 +12,45 @@ import type { DataState } from './plan'
  *      back into Trellis and previewed as a set of changes.
  */
 
+/** The writer's starting point for a new story. Everything but `text` is optional. */
+export interface Spark {
+  text: string
+  characterIds: string[]
+  /** '' = let the AI suggest. */
+  heat: string
+  length: 'short' | 'novella' | 'novel'
+  density: 'lean' | 'rich' | 'lush'
+}
+
+/** What the writer picked from the AI's options. */
+export interface Picks {
+  direction: Direction | null
+  /** Free text: "a mix of 1 and 3", or their own direction. */
+  customDirection: string
+  themes: string[]
+  style: StyleChoice | null
+  customStyle: string
+  elements: string[]
+  characters: PatchCharacter[]
+  extra: string
+}
+
+export const LENGTHS: Record<Spark['length'], { label: string; chapters: string }> = {
+  short: { label: 'Short', chapters: '3–5' },
+  novella: { label: 'Novella', chapters: '6–10' },
+  novel: { label: 'Novel', chapters: '12–20' },
+}
+export const DENSITIES: Record<Spark['density'], { label: string; beats: string }> = {
+  lean: { label: 'Lean', beats: '3–4' },
+  rich: { label: 'Rich', beats: '5–7' },
+  lush: { label: 'Lush', beats: '7–10' },
+}
+
 export type AiRequest =
-  | { kind: 'new-story'; overview: string; characterIds: string[]; chapters: number | null; beatsPerChapter: string }
+  | { kind: 'spark'; spark: Spark; avoid?: string[] }
+  | { kind: 'outline'; spark: Spark; picks: Picks | null }
+  | { kind: 'brainstorm'; chapterId: string; focus: string }
+  | { kind: 'weave'; storyId: string; ideas: Idea[]; extra: string }
   | { kind: 'story'; storyId: string; instruction: string; includeOutline: boolean }
   | { kind: 'character'; characterId: string; instruction: string }
   | { kind: 'new-character'; idea: string; storyId: string | null }
@@ -24,7 +63,7 @@ const omitEmpty = <T extends object>(o: T): Partial<T> =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== '' && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0))) as Partial<T>
 
 function storyJson(s: Story) {
-  return omitEmpty({ id: s.id, title: s.title, logline: s.logline, premise: s.premise, genre: s.genre, heat: s.heat, pov: s.pov, tense: s.tense, style: s.style, contentRules: s.contentRules, world: s.world, tags: s.tags })
+  return omitEmpty({ id: s.id, title: s.title, logline: s.logline, premise: s.premise, genre: s.genre, heat: s.heat, pov: s.pov, tense: s.tense, style: s.style, contentRules: s.contentRules, world: s.world, themes: s.themes, tags: s.tags })
 }
 
 function characterJson(c: Character, story?: Story, full = true) {
@@ -100,7 +139,7 @@ const FORMAT = `{
     "pov": "", "tense": "past" | "present",
     "style": "",        // prose style guide for the writing AI
     "contentRules": "", // story-wide always / never
-    "world": "", "tags": []
+    "world": "", "themes": [], "tags": []
   },
   "characters": [       // optional; matched to existing characters by id, then name
     {
@@ -122,10 +161,14 @@ const FORMAT = `{
     {
       "id": "...", "title": "", "purpose": "", "summary": "", "setting": "",
       "pov": "Character name", "characters": ["Name"],
+      "after": "...",   // NEW chapters only: id or title of the chapter it follows, or "start"
       "beatsMode": "merge" | "replace",
       "beats": [
         { "id": "...", "title": "", "description": "", "emotion": "", "tone": "", "pacing": "",
-          "mustInclude": "", "mustAvoid": "", "characters": ["Name"], "targetWords": 900 }
+          "mustInclude": "", "mustAvoid": "", "characters": ["Name"], "targetWords": 900,
+          "after": "...",      // NEW beats only: id or title of the beat it follows, or "start"
+          "optional": false,   // true = a suggestion the writer can opt into
+          "why": "" }          // one line: why this beat / change
       ]
     }
   ],
@@ -139,6 +182,7 @@ function replyRules(mode: 'create' | 'edit'): string {
     'Refer to characters by their exact name everywhere (pov, characters, between).',
     'Write field values as planning notes for a novelist — specific, concrete, vivid. Not prose, not generic.',
     'A beat is one movement of a scene (a glance, a decision, a confession), not a whole scene. "emotion" says what each person feels going in and coming out.',
+    'Use "optional": true for beats that are good suggestions but not essential, and give every new beat a short "why".',
   ]
   const edit = [
     'Keep the "id" of every existing item you change. Leave "id" out for new items.',
@@ -161,6 +205,39 @@ function assemble(title: string, ask: string, context: Array<[string, unknown]>,
   return parts.join('\n\n') + '\n'
 }
 
+const OPTIONS_FORMAT = `{
+  "directions": [   // 4 distinct takes on the story
+    { "title": "", "description": "2–3 sentence pitch", "logline": "", "premise": "", "genre": "", "heat": "" }
+  ],
+  "themes": [ { "title": "", "description": "" } ],          // 8
+  "styles": [       // 4 clearly different prose styles
+    { "title": "", "description": "a usable style guide", "pov": "", "tense": "past" | "present",
+      "sample": "a 3–5 sentence paragraph from THIS story, written in this style" }
+  ],
+  "elements": [ { "title": "", "description": "" } ],        // 10–12: set pieces, tropes, dynamics, motifs, key moments
+  "characters": [   // 4–6 concepts (skip any I already gave you)
+    { "name": "", "pronouns": "", "age": "", "tagline": "", "role": "", "personality": "", "desires": "" }
+  ]
+}`
+
+const sparkShape = (spark: Spark) =>
+  `${LENGTHS[spark.length].label} length: ${LENGTHS[spark.length].chapters} chapters, about ${DENSITIES[spark.density].beats} beats each.${spark.heat ? ` Heat: ${spark.heat}.` : ''}`
+
+/** Compact outline for weaving: enough to place things, small enough to stay reliable. */
+function outlineJson(chapters: Chapter[], beatsOf: (id: string) => Beat[], hasProse: (id: string) => boolean) {
+  return chapters.map((ch, i) =>
+    omitEmpty({
+      id: ch.id,
+      chapter: i + 1,
+      title: ch.title,
+      purpose: ch.purpose,
+      beats: beatsOf(ch.id).map((b) =>
+        omitEmpty({ id: b.id, title: b.title, description: b.description.length > 220 ? `${b.description.slice(0, 219)}…` : b.description, written: hasProse(b.id) || undefined }),
+      ),
+    }),
+  )
+}
+
 /* ───────────────────────────── Builders ───────────────────────────── */
 
 export function buildAiRequest(req: AiRequest, state: DataState): { title: string; prompt: string; targetStoryId: string | null } {
@@ -171,26 +248,119 @@ export function buildAiRequest(req: AiRequest, state: DataState): { title: strin
   const relsAmong = (ids: string[]) => state.relationships.filter((r) => ids.includes(r.characterIds[0]) && ids.includes(r.characterIds[1]))
 
   switch (req.kind) {
-    case 'new-story': {
-      const chars = req.characterIds.map((id) => charById.get(id)).filter((c): c is Character => !!c)
-      const shape = [
-        req.chapters ? `${req.chapters} chapters` : 'as many chapters as the story needs (usually 6–12)',
-        `${req.beatsPerChapter || '3–6'} beats per chapter`,
-      ].join(', ')
+    case 'spark': {
+      const chars = req.spark.characterIds.map((id) => charById.get(id)).filter((c): c is Character => !!c)
       const ask = [
-        req.overview.trim(),
+        req.spark.text.trim(),
         '',
-        `Build the complete plan: the story bible, every character (new ones in full depth; enrich the existing ones I've given only where this story needs it, via "storyNotes"), the key relationships, and an outline of ${shape}.`,
-        chars.length ? `Use these existing characters (keep their ids and names): ${chars.map((c) => c.name).join(', ')}.` : 'Create the characters the story needs.',
-      ].join('\n')
+        `Don't write the plan yet. Give me OPTIONS to choose from, so I can shape the story before it's outlined. ${sparkShape(req.spark)}`,
+        'Make the options genuinely different from each other — range from the expected to the surprising. Keep them true to my spark.',
+        req.avoid?.length ? `I've already seen these — give me fresh alternatives instead: ${req.avoid.join('; ')}.` : '',
+      ]
+        .filter((l) => l !== undefined)
+        .join('\n')
+      const parts = [
+        '# Trellis request: brainstorm options for a new story',
+        'You are a story-development partner helping me plan long-form, character-driven adult fiction. I plan in an app called Trellis; I will pick from your options and then ask you for the full outline.',
+        `## My spark\n\n${ask.trim()}`,
+        ...(chars.length ? [`## Characters I want to use\n\n${block(chars.map((c) => characterJson(c, undefined, false)))}`] : []),
+        `## Reply format\n\n\`\`\`\n${OPTIONS_FORMAT}\n\`\`\``,
+        '## Rules\n\n- Reply with exactly ONE ```json code block in the format above, nothing else.\n- Valid JSON: double quotes, no trailing commas, no comments.\n- Be specific and vivid; avoid generic options.',
+      ]
+      return { title: 'Story options', targetStoryId: null, prompt: parts.join('\n\n') + '\n' }
+    }
+
+    case 'outline': {
+      const { spark, picks } = req
+      const chars = spark.characterIds.map((id) => charById.get(id)).filter((c): c is Character => !!c)
+      const lines = [
+        spark.text.trim(),
+        '',
+        picks?.direction ? `Direction I chose: “${picks.direction.title}” — ${picks.direction.logline || picks.direction.description}\n${picks.direction.premise}` : '',
+        picks?.customDirection ? `My notes on the direction: ${picks.customDirection}` : '',
+        picks?.themes.length ? `Themes to explore: ${picks.themes.join('; ')}.` : '',
+        picks?.style ? `Prose style I chose: “${picks.style.title}” — ${picks.style.description}${picks.style.pov ? ` POV: ${picks.style.pov}.` : ''}${picks.style.tense ? ` Tense: ${picks.style.tense}.` : ''}` : '',
+        picks?.customStyle ? `Style notes: ${picks.customStyle}` : '',
+        picks?.elements.length ? `Elements that must be in the story (place each where it works best):\n${picks.elements.map((e) => `- ${e}`).join('\n')}` : '',
+        picks?.extra ? `Also: ${picks.extra}` : '',
+        '',
+        `Now build the complete plan: the story bible (including a detailed "style" guide and "themes"), every character in full depth, the key relationships, and the full outline. ${sparkShape(spark)}`,
+        'For every chapter, also add 1–3 extra beats marked "optional": true with a "why" — alternatives or extra moments I can opt into.',
+        chars.length ? `Use these existing characters (keep their ids and names): ${chars.map((c) => c.name).join(', ')}.` : '',
+      ].filter(Boolean)
+      const context: Array<[string, unknown]> = []
+      if (chars.length) context.push(['Existing characters to use', chars.map((c) => characterJson(c))])
+      if (picks?.characters.length) context.push(['Character concepts I chose (develop them fully)', picks.characters])
+      return { title: 'Plan a new story', targetStoryId: null, prompt: assemble('build the full plan for a new story', lines.join('\n'), context, 'create') }
+    }
+
+    case 'brainstorm': {
+      const ch = state.chapters.find((c) => c.id === req.chapterId)
+      if (!ch) throw new Error('Chapter not found')
+      const story = state.stories.find((s) => s.id === ch.storyId)!
+      const all = chaptersOf(story.id)
+      const i = all.findIndex((c) => c.id === ch.id)
+      const castIds = story.cast.map((m) => m.characterId)
+      const ask = [
+        req.focus.trim() ? `Focus: ${req.focus.trim()}` : '',
+        `Brainstorm 8–12 candidate beats for chapter ${i + 1}${ch.title ? ` (“${ch.title}”)` : ''}: new moments, complications, reversals, intimate beats, quiet character beats. Range from the obvious to the surprising.`,
+        'Return them as new beats of this chapter (beatsMode "merge"), each with "after" (the id of the beat it should follow, or "start") and a one-line "why".',
+        'Mark your 3–5 strongest with "optional": false and the rest "optional": true — I will choose which to keep.',
+        'Do not change existing beats.',
+      ]
+        .filter(Boolean)
+        .join('\n')
       return {
-        title: 'Plan a new story',
-        targetStoryId: null,
+        title: `Brainstorm chapter ${i + 1}`,
+        targetStoryId: story.id,
         prompt: assemble(
-          'plan a new story',
+          `brainstorm beats for chapter ${i + 1}`,
           ask,
-          chars.length ? [['Existing characters to use', chars.map((c) => characterJson(c))], ...(relsAmong(req.characterIds).length ? [['Their existing relationships', relsAmong(req.characterIds).map((r) => relationshipJson(r, names))] as [string, unknown]] : [])] : [],
-          'create',
+          [
+            ['The story', storyJson(story)],
+            ['Cast', castIds.map((id) => charById.get(id)).filter((c): c is Character => !!c).map((c) => characterJson(c, story, false))],
+            ['Relationships', relsAmong(castIds).map((r) => relationshipJson(r, names))],
+            ['Whole outline (for context)', outlineJson(all, beatsOf, (id) => !!state.beatsWithProse?.has(id))],
+            ['This chapter', chapterJson(ch, beatsOf(ch.id), names)],
+          ],
+          'edit',
+        ),
+      }
+    }
+
+    case 'weave': {
+      const story = state.stories.find((s) => s.id === req.storyId)
+      if (!story) throw new Error('Story not found')
+      const castIds = story.cast.map((m) => m.characterId)
+      const ideas = req.ideas.map((x, n) => `${n + 1}. ${x.kind === 'change' ? '[CHANGE] ' : ''}${x.text}`).join('\n')
+      const ask = [
+        'Weave these into the outline, each where it fits best in the story:',
+        ideas,
+        req.extra.trim() ? `\nAlso: ${req.extra.trim()}` : '',
+        '',
+        'How:',
+        '- Prefer adding new beats, placed with "after" (the id of the beat they follow, or "start"). Put them in the chapter where they belong.',
+        '- Adjust existing beats only where needed to make an idea land or stay consistent — keep their ids and include only the fields you change.',
+        '- [CHANGE] items describe something already decided: update every chapter and beat that now contradicts it.',
+        '- If an idea needs its own space, add a new chapter with "after".',
+        '- Never delete beats. Beats marked "written" already have prose — change them only if truly necessary.',
+        '- Give every new or changed beat a "why" that names the idea it serves. If an idea doesn’t fit, explain in "notes".',
+      ]
+        .filter((l) => l !== '')
+        .join('\n')
+      return {
+        title: `Weave ${req.ideas.length} idea${req.ideas.length === 1 ? '' : 's'} in`,
+        targetStoryId: story.id,
+        prompt: assemble(
+          'weave ideas into the outline',
+          ask,
+          [
+            ['The story', storyJson(story)],
+            ['Cast', castIds.map((id) => charById.get(id)).filter((c): c is Character => !!c).map((c) => characterJson(c, story, false))],
+            ['Relationships', relsAmong(castIds).map((r) => relationshipJson(r, names))],
+            ['Outline', outlineJson(chaptersOf(story.id), beatsOf, (id) => !!state.beatsWithProse?.has(id))],
+          ],
+          'edit',
         ),
       }
     }

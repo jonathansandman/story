@@ -71,6 +71,9 @@ export function StoryBible() {
         <Field label="Setting and world">
           <TextArea minRows={3} value={story.world} onCommit={(world) => set({ world })} placeholder="Places, season, texture, rules of the world." />
         </Field>
+        <Field label="Themes" hint="What the story is really about. Exported with every prompt.">
+          <TagInput value={story.themes ?? []} onChange={(themes) => set({ themes })} placeholder="Add a theme…" />
+        </Field>
         <Field label="Tags">
           <TagInput value={story.tags} onChange={(tags) => set({ tags })} />
         </Field>

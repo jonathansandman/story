@@ -38,9 +38,21 @@ export class TrellisDB extends Dexie {
             b.activeDraftId ??= null
           }),
       )
+    // v3: story themes + ideas inbox.
+    this.version(3)
+      .stores({})
+      .upgrade((tx) =>
+        tx
+          .table('stories')
+          .toCollection()
+          .modify((s: Partial<Story>) => {
+            s.themes ??= []
+            s.ideas ??= []
+          }),
+      )
   }
 }
 
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export const db = new TrellisDB()

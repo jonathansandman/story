@@ -1,6 +1,6 @@
 import { db, SCHEMA_VERSION, type TrellisDB } from './db'
 import { makeBeat, makeChapter, makeCharacter, makeDraft, makeRelationship, makeStory, sortPair } from './factories'
-import type { Beat, Chapter, Character, Draft, DraftSource, Relationship, Story, TrellisBackup } from './types'
+import type { Beat, Chapter, Character, Draft, DraftSource, Idea, Relationship, Story, TrellisBackup } from './types'
 import { newId } from '@/lib/id'
 import { stripMarkers } from '@/export/split'
 
@@ -324,7 +324,8 @@ export async function importBackup(backup: TrellisBackup, database: TrellisDB = 
       ])
       await database.characters.bulkAdd(backup.characters)
       await database.relationships.bulkAdd(backup.relationships ?? [])
-      await database.stories.bulkAdd(backup.stories)
+      // Older backups predate themes and the ideas inbox.
+      await database.stories.bulkAdd(backup.stories.map((s) => ({ ...s, themes: s.themes ?? [], ideas: s.ideas ?? [] })))
       await database.chapters.bulkAdd(backup.chapters ?? [])
       // v1 backups predate drafts: default the new field.
       await database.beats.bulkAdd(backup.beats.map((b) => ({ ...b, activeDraftId: b.activeDraftId ?? null })))
@@ -357,4 +358,27 @@ export async function autoSnapshot(intervalMs = 1000 * 60 * 60 * 6) {
     const count = await db.characters.count()
     if (count > 0) await takeSnapshot('Automatic')
   }
+}
+
+/* ───────────── Ideas inbox ───────────── */
+
+export async function addIdea(storyId: string, text: string, kind: Idea['kind'] = 'idea') {
+  const t = text.trim()
+  if (!t) return
+  await mutateStory(storyId, (s) => {
+    s.ideas = [...(s.ideas ?? []), { id: newId('i_'), text: t, kind, createdAt: Date.now() }]
+  })
+}
+
+export function updateIdea(storyId: string, ideaId: string, text: string) {
+  return mutateStory(storyId, (s) => {
+    const i = s.ideas?.find((x) => x.id === ideaId)
+    if (i) i.text = text
+  })
+}
+
+export function removeIdeas(storyId: string, ideaIds: string[]) {
+  return mutateStory(storyId, (s) => {
+    s.ideas = (s.ideas ?? []).filter((i) => !ideaIds.includes(i.id))
+  })
 }

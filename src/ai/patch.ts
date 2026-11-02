@@ -31,6 +31,7 @@ export interface PatchStory {
   contentRules?: string
   world?: string
   tags?: string[]
+  themes?: string[]
 }
 
 export interface PatchCharacter {
@@ -76,6 +77,15 @@ export interface PatchBeat {
   /** Character names (or ids). */
   characters?: string[]
   targetWords?: number | null
+  /**
+   * Where a NEW beat goes: the id (or title) of the beat it follows, or
+   * "start". Omitted = end of chapter (or the model's list order).
+   */
+  after?: string
+  /** Suggested but not essential — starts unticked in review. */
+  optional?: boolean
+  /** One line on why this beat / change — shown in review, never stored. */
+  why?: string
 }
 
 export interface PatchChapter {
@@ -93,6 +103,10 @@ export interface PatchChapter {
    */
   beatsMode?: 'merge' | 'replace'
   beats?: PatchBeat[]
+  /** Where a NEW chapter goes: id/title of the chapter it follows, or "start". */
+  after?: string
+  optional?: boolean
+  why?: string
 }
 
 export interface TrellisPatch {
@@ -160,18 +174,18 @@ export function parseReply(reply: string): ParseResult {
 
 /* ───────────────────────────── Normalisation ───────────────────────────── */
 
-type Obj = Record<string, unknown>
-const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v)
+export type Obj = Record<string, unknown>
+export const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v)
 
 /** Case/format-insensitive key lookup: "must_include", "mustInclude", "Must include" all match. */
-function pick(o: Obj, ...names: string[]): unknown {
+export function pick(o: Obj, ...names: string[]): unknown {
   const norm = (k: string) => k.toLowerCase().replace(/[^a-z0-9]/g, '')
   const wanted = names.map(norm)
   for (const [k, v] of Object.entries(o)) if (wanted.includes(norm(k))) return v
   return undefined
 }
 
-function str(v: unknown): string | undefined {
+export function str(v: unknown): string | undefined {
   if (v === undefined || v === null) return undefined
   if (typeof v === 'string') return v.trim()
   if (typeof v === 'number' || typeof v === 'boolean') return String(v)
@@ -183,7 +197,7 @@ function str(v: unknown): string | undefined {
   return undefined
 }
 
-function strList(v: unknown, splitCommas = true): string[] | undefined {
+export function strList(v: unknown, splitCommas = true): string[] | undefined {
   if (v === undefined || v === null) return undefined
   if (Array.isArray(v)) return v.map((x) => (isObj(x) ? str(pick(x, 'name', 'line', 'text')) : str(x))).filter((x): x is string => !!x)
   if (typeof v === 'string') return v.split(splitCommas ? /\n|,(?![^(]*\))/ : /\n/).map((s) => s.trim()).filter(Boolean)
@@ -233,6 +247,15 @@ function traits(v: unknown): PatchTrait[] | undefined {
   return undefined
 }
 
+/** optional: true, or recommended: false, both mean "start unticked". */
+function optionalFlag(o: Obj): { optional?: boolean } {
+  const opt = pick(o, 'optional')
+  const rec = pick(o, 'recommended', 'core')
+  if (opt === true || String(opt) === 'true') return { optional: true }
+  if (rec === false || String(rec) === 'false') return { optional: true }
+  return {}
+}
+
 function asArray(v: unknown): unknown[] {
   if (Array.isArray(v)) return v
   if (isObj(v)) return [v]
@@ -261,6 +284,7 @@ export function normalisePatch(data: unknown, warnings: string[]): TrellisPatch 
       }),
       ...(tense !== undefined ? { tense: tense.startsWith('pres') ? 'present' : tense.startsWith('past') ? 'past' : '' } : {}),
       ...(strList(pick(storySrc, 'tags')) ? { tags: strList(pick(storySrc, 'tags')) } : {}),
+      ...(strList(pick(storySrc, 'themes')) ? { themes: strList(pick(storySrc, 'themes')) } : {}),
     }
   }
 
@@ -340,15 +364,28 @@ export function normalisePatch(data: unknown, warnings: string[]): TrellisPatch 
           pacing: ['pace'],
           mustInclude: ['include'],
           mustAvoid: ['avoid', 'exclude'],
+          after: ['afterBeat', 'insertAfter', 'position', 'placeAfter'],
+          why: ['reason', 'rationale', 'because'],
         }),
         ...(characters ? { characters } : {}),
         ...(targetWords !== undefined ? { targetWords } : {}),
+        ...optionalFlag(b),
       })
     }
     const mode = str(pick(ch, 'beatsMode', 'mode'))?.toLowerCase()
     const characters = strList(pick(ch, 'characters', 'cast'))
     chapters.push({
-      ...strings(ch, { id: [], title: ['name'], purpose: ['goal', 'job'], summary: ['synopsis'], setting: ['location', 'place'], pov: ['povCharacter', 'pointOfView'] }),
+      ...strings(ch, {
+        id: [],
+        title: ['name'],
+        purpose: ['goal', 'job'],
+        summary: ['synopsis'],
+        setting: ['location', 'place'],
+        pov: ['povCharacter', 'pointOfView'],
+        after: ['afterChapter', 'insertAfter', 'placeAfter'],
+        why: ['reason', 'rationale'],
+      }),
+      ...optionalFlag(ch),
       ...(characters ? { characters } : {}),
       ...(mode === 'replace' ? { beatsMode: 'replace' as const } : {}),
       ...(pick(ch, 'beats', 'scenes') !== undefined ? { beats } : {}),

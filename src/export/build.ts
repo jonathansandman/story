@@ -197,6 +197,7 @@ function storySection(story: Story, detail: DetailLevel): PromptSection | null {
       ['Genre', story.genre],
       ['Heat level', story.heat],
       ['Premise', detail !== 'brief' && story.premise],
+      ['Themes', (story.themes ?? []).join('; ')],
       ['Setting and world', story.world],
     ]),
     section('style', 'Style guide', [text(story.style)]),

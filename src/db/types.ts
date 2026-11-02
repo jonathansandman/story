@@ -129,9 +129,22 @@ export interface Story extends Timestamps {
   world: string
   status: StoryStatus
   tags: string[]
+  /** Themes the story explores ("trust after betrayal"). Exported with the story bible. */
+  themes: string[]
   cast: CastMember[]
+  /** Ideas inbox: loose ideas or changes waiting to be woven into the outline. */
+  ideas: Idea[]
   /** Saved prompt-export preferences for this story. */
   exportPrefs?: Partial<ExportOptions>
+}
+
+/** A loose idea or change, waiting in the story's inbox to be woven into the outline by AI. */
+export interface Idea {
+  id: ID
+  text: string
+  /** "change" = something already changed (e.g. the premise) that the outline should follow. */
+  kind: 'idea' | 'change'
+  createdAt: number
 }
 
 /* ────────────────────────────── Chapters ───────────────────────────── */

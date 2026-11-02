@@ -1,7 +1,6 @@
 import { Link, useNavigate } from 'react-router'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { BookOpen, Plus, Wand2 } from 'lucide-react'
-import { useAi } from '@/features/ai/ai-context'
 import { db } from '@/db/db'
 import { useCharacters, useStories } from '@/db/hooks'
 import { createStory } from '@/db/repo'
@@ -16,7 +15,14 @@ export function StoriesHome() {
   const stories = useStories()
   const characters = useCharacters()
   const navigate = useNavigate()
-  const { openAi } = useAi()
+  const draft = (() => {
+    try {
+      const raw = localStorage.getItem('trellis.builder')
+      return raw ? ((JSON.parse(raw) as { spark?: { text?: string } }).spark?.text ?? '').trim() : ''
+    } catch {
+      return ''
+    }
+  })()
   const stats = useLiveQuery(async () => {
     const [chapters, beats] = await Promise.all([db.chapters.toArray(), db.beats.toArray()])
     const m = new Map<string, { chapters: number; beats: Record<BeatStatus, number>; total: number }>()
@@ -51,12 +57,26 @@ export function StoriesHome() {
             <Button onClick={create}>
               <Plus /> Blank
             </Button>
-            <Button variant="primary" onClick={() => openAi({ kind: 'new-story' })}>
+            <Button variant="primary" onClick={() => navigate('/new')}>
               <Wand2 /> New story with AI
             </Button>
           </>
         }
       />
+
+      {draft && (
+        <button
+          onClick={() => navigate('/new')}
+          className="mb-6 flex w-full items-center gap-4 rounded-2xl border border-accent/30 bg-accent-soft/40 px-5 py-4 text-left transition-colors hover:border-accent/60"
+        >
+          <Wand2 size={18} className="shrink-0 text-accent" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-medium text-ink">Continue your story in progress</span>
+            <span className="block truncate font-serif text-[14px] text-muted">{draft}</span>
+          </span>
+          <span className="text-[13px] text-accent">Resume →</span>
+        </button>
+      )}
 
       {stories && stories.length === 0 && (
         <EmptyState icon={<BookOpen />} title="Your shelf is empty" action={<Button variant="primary" onClick={create}><Plus /> Start a story</Button>}>

@@ -84,17 +84,53 @@ Markers are never stored. If a model adds one to a single-beat reply, it's strip
 
 **Read** shows the chapter as continuous prose, with **Copy chapter text**.
 
+### Start loose, choose, then build (Story builder)
+
+**New story with AI** opens a guided builder that saves as you go, so switching to Grok on your phone never loses your place. You don't need to know what you want up front:
+
+1. **Spark:** a sentence or a page, as loose as you like. Optionally add library characters, a heat level, the length (Short / Novella / Novel → 3–5 / 6–10 / 12–20 chapters) and how many beats per chapter (Lean / Rich / Lush → 3–4 / 5–7 / 7–10).
+2. **Options:** Grok replies with a menu of choices, not a plan:
+   - 4 story **directions**
+   - 8 **themes**
+   - 4 **prose styles**, each with a sample paragraph from *your* story so you can hear it
+   - 10–12 story **elements** (moments, tropes, set pieces)
+   - 4–6 **character** concepts
+3. **Choose:** tap cards and chips. Add your own themes and moments, describe a mix ("the second one, with the ending of the fourth"), and add anything else. **More options** asks for fresh alternatives and adds them to the list.
+4. **Outline:** Grok builds the full plan from your picks: story bible (with style guide and themes), characters, relationships, chapters and beats. Each chapter also gets a few **optional** beats with a reason, which start unticked.
+5. **Review & create:** tick or untick anything, down to individual beats.
+
+**Skip to outline** goes straight from the spark to a full plan if you already know what you want.
+
+### Ideas inbox: drop an idea, Grok places it
+
+Every outline has a box at the top: **"Add an idea or a change"**. Jot ideas the moment you have them, without deciding where they go. **Weave in with AI** sends Grok the compact outline (ids, titles, short descriptions, which beats are already written) and your ideas, and asks it to:
+
+- place each idea where it fits best, usually as new beats positioned after a specific beat (`"after"`), or as a new chapter;
+- tweak neighbouring beats only where needed, keeping their ids;
+- never delete anything, and avoid changing beats that already have prose;
+- explain each change with a `"why"`.
+
+You review every change in place ("New · after 'The causeway' · *Your idea: jealousy at the gala*"), and woven ideas leave the inbox.
+
+**Big edits ripple through the outline.** When you apply a story-level or character edit to a story that already has beats, Trellis adds a **[CHANGE]** item to that story's inbox, e.g. *"Update the outline to match: Premise: 'old' → 'new'"*. One **Weave in** updates every chapter and beat that now contradicts it.
+
+### Brainstorm beats
+
+On any chapter, **Brainstorm** asks for 8–12 candidate beats, from the obvious to the surprising, each with a reason and a suggested position. Grok's 3–5 strongest arrive ticked and the rest as unticked **ideas**, so picking is just tapping. Each new beat goes exactly where it was suggested.
+
 ### Generating and editing with AI (Grok, Claude, ChatGPT…)
 
 Nothing has to be typed by hand. Every entity can be generated or revised through an external AI, with no API key, by copying and pasting:
 
 | Where | Button | What the AI gets |
 |---|---|---|
-| Stories home | **New story with AI** | Your overview, any library characters you picked, chapter and beat counts. It replies with the story bible, characters, relationships and a full outline. |
+| Stories home | **New story with AI** | Opens the Story builder (above): spark → options → choose → outline. |
+| Outline | **Ideas → Weave in with AI** | Your ideas and changes, plus the compact outline. Replies with placed beats and small edits. |
+| Chapter | **Brainstorm** | The story, cast, outline and chapter. Replies with 8–12 candidate beats to pick from. |
 | Story header / Story bible | **Edit with AI** | The story, cast, relationships and chapter list. Optionally every beat and full character sheets. |
 | Character page | **Develop with AI** | The character and their relationships. |
 | Characters / Cast | **New (character) with AI** | Your idea, plus the story and existing cast for context. |
-| Chapter | **Plan beats with AI** / **Edit beats with AI** | The story, cast, other chapters and this chapter with all its beats. |
+| Chapter | **Edit with AI** | The story, cast, other chapters and this chapter with all its beats. |
 | Beat menu | **Refine plan with AI** | The story, cast, the chapter's beat list and this beat. |
 
 **The flow:** describe what you want (or tap a suggestion), then **Copy prompt for AI** → **Open Grok**, paste, send → copy the whole reply → **I have the reply** → **Paste reply** → **Review changes** → **Apply**.
@@ -102,7 +138,8 @@ Nothing has to be typed by hand. Every entity can be generated or revised throug
 - **The prompt** contains your request, the current data as JSON with ids, the exact reply format, and rules: change only what's asked, keep ids, refer to characters by name, `beatsMode: "replace"` only when giving a complete beat list.
 - **The import is forgiving.** It finds the JSON inside chatty replies and code fences, and repairs smart quotes, trailing commas and comments. It also accepts loose key names (`what_happens`, `emotional_state`), numbers written as strings, appearance as an object, and beats as plain strings.
 - **Matching:** characters by id, then full name, nickname or unique first name. Matching by nickname never renames the character. Chapters by id, then title. Beats by id, then title within the chapter. Names that can't be found produce a warning, never a guess.
-- **The review step** lists every change as **New** or **Update**, with the old value crossed out next to the new one. Beat additions, edits and deletions are shown separately, and deleting a beat with written prose is flagged in red. Untick anything you don't want; if you untick a new character, references to it are removed everywhere.
+- **The review step** lists every change as **New**, **Idea** (optional, starts unticked), **Edit** or **Delete**, with the old value crossed out next to the new one. It shows where each new beat lands and why, and you can tick or untick individual beats. Deleting a beat with written prose is flagged in red. If you untick a new character, references to it are removed everywhere.
+- **Placement:** a new beat may name the beat it follows (`"after"`, by id or title, or `"start"`). Otherwise it goes after whatever the AI listed just before it. New chapters can be placed the same way, and chapters are renumbered.
 - **A snapshot is taken before applying**, so any import can be undone from Settings → Snapshots.
 - **On a phone,** if you leave the app while Grok is thinking, the request is remembered for 3 days. **Import AI reply** (the wand icon in the top bar or sidebar) picks up where you left off and applies to the right story.
 
