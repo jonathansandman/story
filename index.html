@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/story/favicon.svg" type="image/svg+xml" />
+    <title>Trellis</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a flash.
+      try {
+        const t = localStorage.getItem('trellis.theme') || 'system'
+        const dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', dark)
+      } catch {}
+    </script>
+    <script type="module" crossorigin src="/story/assets/index-DCkLBojB.js"></script>
+    <link rel="modulepreload" crossorigin href="/story/assets/react-DJfhpvuI.js">
+    <link rel="modulepreload" crossorigin href="/story/assets/ui-qoJL1cEs.js">
+    <link rel="modulepreload" crossorigin href="/story/assets/data-DzA0E0se.js">
+    <link rel="stylesheet" crossorigin href="/story/assets/index-DPZ0w3B8.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
