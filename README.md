@@ -24,6 +24,10 @@ npm run dev        # http://localhost:5173
 | `npm test` | Unit tests for the prompt engine (Vitest) |
 | `npm run typecheck` | TypeScript only |
 
+### Hosting
+
+It's a static site with no server. `vercel.json` (Vercel) and `public/_redirects` (Netlify) send every route back to `index.html`, so links within the app work when opened directly. On either service, import the repo and the defaults work: build `npm run build`, output `dist`.
+
 On first load, Trellis seeds an example story, *The Long Weekend*. It has three characters (a married couple and the first love who lives next door), two defined relationships, three chapters and seven beats at different stages of planning. Use **Settings → Reset to example data** to bring it back.
 
 No accounts and no server. Your data lives in your browser's IndexedDB.
