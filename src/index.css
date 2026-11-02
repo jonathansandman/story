@@ -1,0 +1,118 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Design tokens. Warm paper in light mode, warm ink in dark mode; a single
+ * muted wine accent. Components use the semantic names (bg-surface, text-muted,
+ * border-line, bg-accent…) — never raw palette colours — so theming stays here.
+ */
+:root {
+  --bg: #f7f4ef;
+  --surface: #fffdf9;
+  --surface-2: #f1ede6;
+  --surface-3: #e8e2d8;
+  --line: #e4ddd2;
+  --line-strong: #d3cabc;
+  --ink: #2a2521;
+  --muted: #6e655c;
+  --faint: #a1978c;
+  --accent: #7d3b4d;
+  --accent-hover: #6a3141;
+  --accent-soft: #f3e6e8;
+  --accent-ink: #fffaf7;
+  --ok: #4f7a55;
+  --warn: #a2702b;
+  --shadow: 32 24 18;
+}
+
+.dark {
+  --bg: #161412;
+  --surface: #1d1a18;
+  --surface-2: #252220;
+  --surface-3: #302c29;
+  --line: #2f2b28;
+  --line-strong: #3d3834;
+  --ink: #ece6de;
+  --muted: #a69c91;
+  --faint: #6f675f;
+  --accent: #d48a9c;
+  --accent-hover: #e09fae;
+  --accent-soft: #33232a;
+  --accent-ink: #1a1214;
+  --ok: #8fb894;
+  --warn: #d6a35c;
+  --shadow: 0 0 0;
+}
+
+@theme inline {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Newsreader Variable', ui-serif, Georgia, serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+
+  --shadow-soft: 0 1px 2px rgb(var(--shadow) / 0.04), 0 4px 16px rgb(var(--shadow) / 0.05);
+  --shadow-lift: 0 2px 4px rgb(var(--shadow) / 0.06), 0 12px 40px rgb(var(--shadow) / 0.12);
+
+  --animate-fade-in: fade-in 160ms ease-out;
+  --animate-rise: rise 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-bg text-ink font-sans text-[14px] leading-relaxed;
+    font-feature-settings: 'ss01', 'cv11';
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--accent) 60%, transparent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  textarea,
+  input {
+    @apply placeholder:text-faint;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
