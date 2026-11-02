@@ -75,3 +75,22 @@ describe('changeIdeasFor', () => {
     expect(ideas[0]!.text).toContain('Theo Okafor — Voice:')
   })
 })
+
+describe('outlining an existing story', () => {
+  it('sends the bible and cast with ids, and plans into the same story', () => {
+    const s: Spark = { text: 'Darker middle.', characterIds: ['c_mara', 'c_theo'], heat: '', length: 'short', density: 'rich', storyId: 's_long_weekend' }
+    const { prompt, targetStoryId } = buildAiRequest({ kind: 'outline', spark: s, picks: null }, state)
+    expect(targetStoryId).toBe('s_long_weekend')
+    expect(prompt).toContain('"id": "s_long_weekend"')
+    expect(prompt).toContain('Keep the story\'s "id"')
+    const spark = buildAiRequest({ kind: 'spark', spark: s }, state).prompt
+    expect(spark).toContain('This story already exists')
+
+    const empty: DataState = { ...state, chapters: [], beats: [] }
+    const { patch } = parseReply(JSON.stringify({ story: { id: 's_long_weekend', themes: ['Grief'] }, chapters: [{ title: 'One', pov: 'Mara', beats: [{ title: 'A', description: 'a' }] }] }))
+    const plan = planPatch(patch!, empty, { targetStoryId })
+    expect(plan.storyIsNew).toBe(false)
+    expect(plan.changes.map((c) => `${c.group}:${c.op}`)).toEqual(['story:update', 'chapter:create'])
+    expect((plan.changes[1]!.row as { povCharacterId: string }).povCharacterId).toBe('c_mara')
+  })
+})

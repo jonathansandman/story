@@ -77,6 +77,9 @@ export function StoryLayout() {
                 </Button>
               </MenuTrigger>
               <MenuContent>
+                <MenuItem icon={<Wand2 />} onSelect={() => navigate(`/new?story=${story.id}`)}>
+                  Outline with AI…
+                </MenuItem>
                 <MenuItem
                   danger
                   icon={<Trash2 />}

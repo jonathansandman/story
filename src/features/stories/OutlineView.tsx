@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useOutletContext, useSearchParams } from 'react-router'
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router'
 import { ChevronDown, Copy, GripVertical, Lightbulb, MoreHorizontal, Plus, Sparkles, Trash2, Wand2, X } from 'lucide-react'
 import { useAi } from '@/features/ai/ai-context'
 import { useChapters, useCharacters, useStoryBeats, useStoryProse } from '@/db/hooks'
@@ -31,6 +31,7 @@ export function OutlineView() {
   const characters = useCharacters()
   const prose = useStoryProse(story.id)
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const [selected, setSelected] = useState<string[]>([])
   const { quickCopy, openComposer } = useComposer()
 
@@ -73,10 +74,20 @@ export function OutlineView() {
             onDeleted={() => setParams({}, { replace: true })}
           />
         ) : (
-          <div className="py-20 text-center">
-            <Button variant="primary" onClick={async () => selectChapter((await createChapter(story.id, { title: 'Chapter one' })).id)}>
-              <Plus /> Add the first chapter
-            </Button>
+          <div className="rounded-2xl border border-dashed border-line-strong px-6 py-14 text-center">
+            <Wand2 size={22} className="mx-auto text-accent" />
+            <p className="mt-3 font-serif text-[22px] text-ink">No chapters yet</p>
+            <p className="mx-auto mt-1.5 max-w-md text-[13.5px] text-muted">
+              Let Grok outline it from your story bible and cast — with options to choose from first, or straight to chapters and beats.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              <Button variant="primary" onClick={() => navigate(`/new?story=${story.id}`)}>
+                <Wand2 /> Outline with AI
+              </Button>
+              <Button onClick={async () => selectChapter((await createChapter(story.id, { title: 'Chapter one' })).id)}>
+                <Plus /> Add a chapter myself
+              </Button>
+            </div>
           </div>
         )}
       </div>

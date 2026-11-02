@@ -101,6 +101,15 @@ Markers are never stored. If a model adds one to a single-beat reply, it's strip
 
 **Skip to outline** goes straight from the spark to a full plan if you already know what you want.
 
+**Outlining an existing story:** if a story has no chapters, for example because you deleted them to start again after reworking the premise, the outline shows **Outline with AI**. It's also in the story's **⋯** menu. This opens the same builder in *story mode*:
+
+- Grok works from your story bible and cast, keeping their ids.
+- The spark becomes optional steering ("make the middle darker").
+- Options are about *how to tell* the story.
+- The result is added to the existing story instead of creating a new one.
+
+If the story still has chapters, you're warned that new chapters go after them.
+
 ### Ideas inbox: drop an idea, Grok places it
 
 Every outline has a box at the top: **"Add an idea or a change"**. Jot ideas the moment you have them, without deciding where they go. **Weave in with AI** sends Grok the compact outline (ids, titles, short descriptions, which beats are already written) and your ideas, and asks it to:

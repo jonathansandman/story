@@ -20,6 +20,8 @@ export interface Spark {
   heat: string
   length: 'short' | 'novella' | 'novel'
   density: 'lean' | 'rich' | 'lush'
+  /** Outlining an EXISTING story (its bible and cast are sent as context, ids kept). */
+  storyId?: string
 }
 
 /** What the writer picked from the AI's options. */
@@ -189,7 +191,7 @@ function replyRules(mode: 'create' | 'edit'): string {
     'Only include the items and fields you are changing or adding — everything you leave out stays as it is.',
     'For a chapter\'s beats: "beatsMode": "merge" (default) updates/adds only the beats you list; use "replace" only if you are giving the complete new beat list for that chapter (beats you leave out will be deleted).',
   ]
-  const create = ['Fill in every field you can — this is the first draft of the whole plan, and depth now saves work later.', 'Do not include "id" fields; everything is new (except characters I gave you with ids, which you may keep and enrich).']
+  const create = ['Fill in every field you can — this is the first draft of the whole plan, and depth now saves work later.', 'Leave out "id" for new things. Keep the "id" of the story and of any characters I gave you with ids (you may enrich them).']
   return [...common, ...(mode === 'edit' ? edit : create)].map((r) => `- ${r}`).join('\n')
 }
 
@@ -250,8 +252,10 @@ export function buildAiRequest(req: AiRequest, state: DataState): { title: strin
   switch (req.kind) {
     case 'spark': {
       const chars = req.spark.characterIds.map((id) => charById.get(id)).filter((c): c is Character => !!c)
+      const existing = req.spark.storyId ? state.stories.find((x) => x.id === req.spark.storyId) : undefined
       const ask = [
         req.spark.text.trim(),
+        existing ? 'This story already exists — its bible is below. Give options for how to TELL it: ways it could unfold (as "directions"), themes, prose styles, story elements, and any extra characters it needs. Stay consistent with the bible.' : '',
         '',
         `Don't write the plan yet. Give me OPTIONS to choose from, so I can shape the story before it's outlined. ${sparkShape(req.spark)}`,
         'Make the options genuinely different from each other — range from the expected to the surprising. Keep them true to my spark.',
@@ -260,19 +264,21 @@ export function buildAiRequest(req: AiRequest, state: DataState): { title: strin
         .filter((l) => l !== undefined)
         .join('\n')
       const parts = [
-        '# Trellis request: brainstorm options for a new story',
+        `# Trellis request: brainstorm options for ${existing ? `“${existing.title || 'my story'}”` : 'a new story'}`,
         'You are a story-development partner helping me plan long-form, character-driven adult fiction. I plan in an app called Trellis; I will pick from your options and then ask you for the full outline.',
         `## My spark\n\n${ask.trim()}`,
-        ...(chars.length ? [`## Characters I want to use\n\n${block(chars.map((c) => characterJson(c, undefined, false)))}`] : []),
+        ...(existing ? [`## The story so far (bible)\n\n${block(storyJson(existing))}`] : []),
+        ...(chars.length ? [`## Characters I want to use\n\n${block(chars.map((c) => characterJson(c, existing, false)))}`] : []),
         `## Reply format\n\n\`\`\`\n${OPTIONS_FORMAT}\n\`\`\``,
         '## Rules\n\n- Reply with exactly ONE ```json code block in the format above, nothing else.\n- Valid JSON: double quotes, no trailing commas, no comments.\n- Be specific and vivid; avoid generic options.',
       ]
-      return { title: 'Story options', targetStoryId: null, prompt: parts.join('\n\n') + '\n' }
+      return { title: 'Story options', targetStoryId: existing?.id ?? null, prompt: parts.join('\n\n') + '\n' }
     }
 
     case 'outline': {
       const { spark, picks } = req
       const chars = spark.characterIds.map((id) => charById.get(id)).filter((c): c is Character => !!c)
+      const existing = spark.storyId ? state.stories.find((x) => x.id === spark.storyId) : undefined
       const lines = [
         spark.text.trim(),
         '',
@@ -284,14 +290,25 @@ export function buildAiRequest(req: AiRequest, state: DataState): { title: strin
         picks?.elements.length ? `Elements that must be in the story (place each where it works best):\n${picks.elements.map((e) => `- ${e}`).join('\n')}` : '',
         picks?.extra ? `Also: ${picks.extra}` : '',
         '',
-        `Now build the complete plan: the story bible (including a detailed "style" guide and "themes"), every character in full depth, the key relationships, and the full outline. ${sparkShape(spark)}`,
+        existing
+          ? `Now build the full outline for this existing story (bible below): chapters and beats. ${sparkShape(spark)} Keep the story's "id"; include only the story fields you are genuinely improving (e.g. "style" or "themes" from my picks). Keep existing characters and their ids; add new characters and relationships only if the story needs them.`
+          : `Now build the complete plan: the story bible (including a detailed "style" guide and "themes"), every character in full depth, the key relationships, and the full outline. ${sparkShape(spark)}`,
         'For every chapter, also add 1–3 extra beats marked "optional": true with a "why" — alternatives or extra moments I can opt into.',
         chars.length ? `Use these existing characters (keep their ids and names): ${chars.map((c) => c.name).join(', ')}.` : '',
       ].filter(Boolean)
       const context: Array<[string, unknown]> = []
-      if (chars.length) context.push(['Existing characters to use', chars.map((c) => characterJson(c))])
+      if (existing) {
+        context.push(['The story (existing — keep its id)', storyJson(existing)])
+        const rels = relsAmong(chars.map((c) => c.id))
+        if (rels.length) context.push(['Relationships', rels.map((r) => relationshipJson(r, names))])
+      }
+      if (chars.length) context.push([existing ? 'Cast (keep their ids)' : 'Existing characters to use', chars.map((c) => characterJson(c, existing))])
       if (picks?.characters.length) context.push(['Character concepts I chose (develop them fully)', picks.characters])
-      return { title: 'Plan a new story', targetStoryId: null, prompt: assemble('build the full plan for a new story', lines.join('\n'), context, 'create') }
+      return {
+        title: existing ? `Outline “${existing.title || 'Untitled story'}”` : 'Plan a new story',
+        targetStoryId: existing?.id ?? null,
+        prompt: assemble(existing ? `outline the story “${existing.title || 'Untitled'}”` : 'build the full plan for a new story', lines.join('\n'), context, 'create'),
+      }
     }
 
     case 'brainstorm': {

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { ArrowLeft, ArrowRight, Check, Plus, RotateCcw, Sparkles, Wand2, X } from 'lucide-react'
-import { useCharacters } from '@/db/hooks'
+import { useChapters, useCharacters, useStory } from '@/db/hooks'
+import type { Story } from '@/db/types'
 import { applyPlan, loadState } from '@/ai/apply'
 import { emptyOptions, mergeOptions, parseOptions, type Choice, type StoryOptions } from '@/ai/options'
 import { buildAiRequest, DENSITIES, LENGTHS, type Picks, type Spark } from '@/ai/requests'
@@ -45,7 +46,8 @@ interface BuilderState {
   reply: string
 }
 
-const KEY = 'trellis.builder'
+/** New stories share one draft; outlining an existing story keeps a draft per story. */
+const keyFor = (storyId?: string | null) => (storyId ? `trellis.builder:${storyId}` : 'trellis.builder')
 const HEATS = ['', 'Sweet, fade to black', 'Steamy, some explicit scenes', 'Explicit, slow burn']
 
 const fresh = (): BuilderState => ({
@@ -57,14 +59,20 @@ const fresh = (): BuilderState => ({
   reply: '',
 })
 
-function load(): BuilderState {
+function load(storyId: string | null): BuilderState | null {
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = localStorage.getItem(keyFor(storyId))
     if (raw) return { ...fresh(), ...(JSON.parse(raw) as BuilderState) }
   } catch {
     /* ignore */
   }
-  return fresh()
+  return null
+}
+
+/** Start outlining an existing story: its cast and heat are the starting point. */
+const freshFor = (story: Story): BuilderState => {
+  const s = fresh()
+  return { ...s, spark: { ...s.spark, storyId: story.id, characterIds: story.cast.map((m) => m.characterId), heat: story.heat } }
 }
 
 const SPARK_EXAMPLES = [
@@ -81,7 +89,20 @@ const STEPS: { id: Step[]; label: string }[] = [
 ]
 
 export function StoryBuilder() {
-  const [st, setSt] = useState<BuilderState>(load)
+  const [params] = useSearchParams()
+  const storyId = params.get('story')
+  const story = useStory(storyId ?? undefined)
+  const existingChapters = useChapters(storyId ?? undefined)
+  const [st, setSt] = useState<BuilderState>(() => load(storyId) ?? fresh())
+  // Story mode: once the story loads, seed from it (unless resuming a draft for it).
+  useEffect(() => {
+    if (story && st.spark.storyId !== story.id) setSt(load(story.id) ?? freshFor(story))
+  }, [story, st.spark.storyId])
+  const storyMode = !!storyId
+  // Switching from story mode back to a brand-new story (same route, different query).
+  useEffect(() => {
+    if (!storyId && st.spark.storyId) setSt(load(null) ?? fresh())
+  }, [storyId, st.spark.storyId])
   const characters = useCharacters()
   const charMap = useMemo(() => new Map((characters ?? []).map((c) => [c.id, c])), [characters])
   const navigate = useNavigate()
@@ -92,7 +113,7 @@ export function StoryBuilder() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(st))
+      if (!storyMode || st.spark.storyId === storyId) localStorage.setItem(keyFor(st.spark.storyId), JSON.stringify(st))
     } catch {
       /* ignore */
     }
@@ -109,7 +130,7 @@ export function StoryBuilder() {
   const parsedOptions = useMemo(() => (st.step === 'send-options' && st.reply.trim() ? parseOptions(st.reply) : null), [st.step, st.reply])
 
   /* ── Outline reply ── */
-  const outline = useReplyPlan(st.step === 'send-outline' || st.step === 'review' ? st.reply : '', null)
+  const outline = useReplyPlan(st.step === 'send-outline' || st.step === 'review' ? st.reply : '', st.spark.storyId ?? null)
 
   const opts = st.options ?? emptyOptions()
   const picks: Picks = {
@@ -148,8 +169,12 @@ export function StoryBuilder() {
     try {
       await applyPlan(outline.plan, outline.selected)
       const id = outline.plan.targetStoryId
-      localStorage.removeItem(KEY)
-      toast('Story created', 'Start writing from any chapter’s Write tab')
+      try {
+        localStorage.removeItem(keyFor(st.spark.storyId))
+      } catch {
+        /* ignore */
+      }
+      toast(storyMode ? 'Outline added' : 'Story created', 'Start writing from any chapter’s Write tab')
       if (id) navigate(`/stories/${id}`)
     } catch (e) {
       toast('Couldn’t create the story', e instanceof Error ? e.message : String(e))
@@ -166,10 +191,20 @@ export function StoryBuilder() {
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
           <div className="mb-1 flex items-center gap-2 text-[11.5px] font-semibold tracking-[0.08em] text-faint uppercase">
-            <Wand2 size={13} /> Story builder
+            <Wand2 size={13} /> {storyMode ? 'Outline with AI' : 'Story builder'}
           </div>
           <h1 className="font-serif text-[30px] leading-tight tracking-tight">
-            {st.step === 'spark' || st.step === 'send-options' ? 'What’s the spark?' : st.step === 'choose' ? 'Shape it' : st.step === 'send-outline' ? 'Build the outline' : 'Your story'}
+            {st.step === 'spark' || st.step === 'send-options'
+              ? storyMode
+                ? `Outline “${story?.title || 'Untitled story'}”`
+                : 'What’s the spark?'
+              : st.step === 'choose'
+                ? 'Shape it'
+                : st.step === 'send-outline'
+                  ? 'Build the outline'
+                  : storyMode
+                    ? 'Your outline'
+                    : 'Your story'}
           </h1>
         </div>
         {st !== null && (st.spark.text || st.options) && (
@@ -177,7 +212,7 @@ export function StoryBuilder() {
             variant="ghost"
             size="sm"
             onClick={async () => {
-              if (await confirm('Start over?', { body: 'Your spark, options and picks will be cleared.', action: 'Start over' })) setSt(fresh())
+              if (await confirm('Start over?', { body: 'Your spark, options and picks will be cleared.', action: 'Start over' })) setSt(story ? freshFor(story) : fresh())
             }}
           >
             <RotateCcw /> Start over
@@ -204,16 +239,37 @@ export function StoryBuilder() {
       {/* ── Spark ── */}
       {st.step === 'spark' && (
         <div className="space-y-7">
+          {storyMode && story && (
+            <div className="rounded-2xl border border-line bg-surface p-5 shadow-soft">
+              <p className="text-[11.5px] font-semibold tracking-[0.08em] text-faint uppercase">Working from your story bible</p>
+              <p className="mt-1.5 font-serif text-[20px] leading-snug">{story.title || 'Untitled story'}</p>
+              {story.logline && <p className="mt-1 text-[14px] text-muted">{story.logline}</p>}
+              {story.premise && <p className="mt-2 line-clamp-4 text-[13.5px] leading-relaxed text-muted">{story.premise}</p>}
+              <Link to={`/stories/${story.id}/bible`} className="mt-3 inline-block text-[13px] text-accent hover:underline">
+                Edit story bible →
+              </Link>
+              {!!existingChapters?.length && (
+                <p className="mt-3 rounded-xl bg-warn/10 px-3 py-2 text-[12.5px] text-ink ring-1 ring-warn/30">
+                  This story already has {existingChapters.length} chapter{existingChapters.length === 1 ? '' : 's'}. New chapters are added after them — delete the old ones first if you want a clean slate.
+                </p>
+              )}
+            </div>
+          )}
           <div>
+            {storyMode && <p className="mb-2 text-[13px] font-medium text-ink">Anything to steer it? (optional)</p>}
             <textarea
               autoFocus
               value={st.spark.text}
               onChange={(e) => setSpark({ text: e.target.value })}
-              rows={6}
-              placeholder="A sentence or a page — a situation, a pair of people, a feeling, a scene you can’t stop thinking about. It doesn’t need to be figured out."
+              rows={storyMode ? 4 : 6}
+              placeholder={
+                storyMode
+                  ? 'e.g. Start with them already married. Make the middle darker. End on an open question.'
+                  : 'A sentence or a page — a situation, a pair of people, a feeling, a scene you can’t stop thinking about. It doesn’t need to be figured out.'
+              }
               className="w-full resize-y rounded-2xl border border-line bg-surface px-5 py-4 font-serif text-[18px] leading-relaxed shadow-soft outline-none placeholder:text-faint focus:border-accent/50"
             />
-            {!st.spark.text && (
+            {!st.spark.text && !storyMode && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {SPARK_EXAMPLES.map((e) => (
                   <button key={e} onClick={() => setSpark({ text: e })} className="rounded-full border border-line bg-surface px-3 py-1 text-left text-[12.5px] text-muted hover:border-line-strong hover:text-ink">
@@ -224,7 +280,7 @@ export function StoryBuilder() {
             )}
           </div>
 
-          <Field label="Bring characters from your library (optional)">
+          <Field label={storyMode ? 'Cast' : 'Bring characters from your library (optional)'}>
             <CharacterChips ids={st.spark.characterIds} characters={charMap} onChange={(characterIds) => setSpark({ characterIds })} placeholder="Pick characters" />
           </Field>
 
@@ -287,7 +343,7 @@ export function StoryBuilder() {
       {/* ── Choose ── */}
       {st.step === 'choose' && (
         <div className="space-y-10">
-          <Section n={1} title="Direction" hint="Pick one, or describe a mix in your own words.">
+          <Section n={1} title={storyMode ? 'How it unfolds' : 'Direction'} hint="Pick one, or describe a mix in your own words.">
             <div className="grid gap-3">
               {opts.directions.map((d) => (
                 <OptionCard key={d.id} on={st.picks.directionId === d.id} onClick={() => setPicks({ directionId: st.picks.directionId === d.id ? null : d.id })} radio>
@@ -428,7 +484,7 @@ export function StoryBuilder() {
                 <ArrowLeft /> Back
               </Button>
             )}
-            {st.step === 'spark' && st.spark.text.trim() && (
+            {st.step === 'spark' && (st.spark.text.trim() || storyMode) && (
               <Button variant="ghost" onClick={() => copy('outline', true)} title="Skip the options and get an outline straight away">
                 Skip to outline
               </Button>
@@ -436,7 +492,7 @@ export function StoryBuilder() {
           </div>
           <div>
             {st.step === 'spark' && (
-              <Button variant="primary" disabled={!st.spark.text.trim()} onClick={() => copy('spark')}>
+              <Button variant="primary" disabled={!st.spark.text.trim() && !storyMode} onClick={() => copy('spark')}>
                 <Sparkles /> Get options
               </Button>
             )}
@@ -457,7 +513,7 @@ export function StoryBuilder() {
             )}
             {st.step === 'review' && (
               <Button variant="primary" disabled={busy} onClick={create}>
-                <Check /> Create story
+                <Check /> {storyMode ? 'Add to story' : 'Create story'}
               </Button>
             )}
           </div>
